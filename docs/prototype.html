@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClaimMaster - 經費申請系統</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome 圖標庫 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 自定義動畫和過渡效果 */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* 狀態顏色定義 */
+        .status-pending { color: #f39c12; }
+        .status-approved { color: #2ecc71; }
+        .status-rejected { color: #e74c3c; }
+        /* 自定義滾動條 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- 狀態管理腳本 -->
+    <script>
+        // 應用狀態管理
+        const appState = {
+            currentUser: {
+                role: 'headmaster', // 可以是 'headmaster', 'admin', 'teacher'
+                name: '張校長'
+            },
+            applications: [
+                {
+                    id: 'app-001',
+                    employeeFullName: 'John Doe',
+                    employeeId: 'EMP001',
+                    departmentTeam: 'IT Department',
+                    dateOfSubmission: '2023-06-15',
+                    purposeOfClaim: 'Business travel expenses for client meeting',
+                    expenseCategory: 'Travel',
+                    dateOfExpense: '2023-06-12',
+                    totalAmountClaimed: 850.00,
+                    itemizedBreakdown: 'Flight ticket: $600\nHotel (2 nights): $200\nMeals: $50',
+                    status: 'PENDING',
+                    isUrgent: true,
+                    submittedAt: '2023-06-15T09:30:00',
+                    policyConfirmation: true,
+                    attachments: [
+                        { name: 'Flight Receipt.pdf', url: '#' },
+                        { name: 'Hotel Invoice.pdf', url: '#' }
+                    ]
+                },
+                {
+                    id: 'app-002',
+                    employeeFullName: 'Jane Smith',
+                    employeeId: 'EMP002',
+                    departmentTeam: 'Marketing',
+                    dateOfSubmission: '2023-06-14',
+                    purposeOfClaim: 'Purchase of software licenses for team',
+                    expenseCategory: 'Software',
+                    dateOfExpense: '2023-06-10',
+                    totalAmountClaimed: 1200.00,
+                    itemizedBreakdown: 'Adobe Creative Cloud (5 licenses): $1200',
+                    status: 'PENDING',
+                    isUrgent: false,
+                    submittedAt: '2023-06-14T14:15:00',
+                    policyConfirmation: true,
+                    attachments: [
+                        { name: 'Software Invoice.pdf', url: '#' }
+                    ]
+                },
+                {
+                    id: 'app-003',
+                    employeeFullName: 'Michael Chen',
+                    employeeId: 'EMP003',
+                    departmentTeam: 'Operations',
+                    dateOfSubmission: '2023-06-10',
+                    purposeOfClaim: 'Office supplies and equipment',
+                    expenseCategory: 'Office Supplies',
+                    dateOfExpense: '2023-06-08',
+                    totalAmountClaimed: 350.00,
+                    itemizedBreakdown: 'Printer cartridges: $120\nStationery: $80\nWhiteboard markers: $150',
+                    status: 'APPROVED',
+                    isUrgent: false,
+                    submittedAt: '2023-06-10T11:20:00',
+                    policyConfirmation: true,
+                    attachments: [
+                        { name: 'Receipt.jpg', url: '#' }
+                    ]
+                }
+            ],
+            filters: {
+                status: 'all', // 'all', 'pending', 'approved', 'rejected'
+                department: 'all',
+                sortBy: 'date-desc'
+            },
+            budgetData: {
+                total: 500000,
+                used: 320000,
+                remaining: 180000
+            },
+            // 初始化方法
+            init: function() {
+                console.log('應用狀態初始化完成');
+                this.renderApplications();
+                this.updateBudgetDisplay();
+            },
+            // 過濾應用程式
+            getFilteredApplications: function() {
+                let filtered = this.applications;
+                
+                // 狀態過濾
+                if (this.filters.status !== 'all') {
+                    filtered = filtered.filter(app => app.status === this.filters.status.toUpperCase());
+                }
+                
+                // 部門過濾
+                if (this.filters.department !== 'all') {
+                    filtered = filtered.filter(app => app.department === this.filters.department.toUpperCase());
+                }
+                
+                // 排序
+                if (this.filters.sortBy === 'date-desc') {
+                    filtered.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+                } else if (this.filters.sortBy === 'date-asc') {
+                    filtered.sort((a, b) => new Date(a.submittedAt) - new Date(b.submittedAt));
+                } else if (this.filters.sortBy === 'amount-desc') {
+                    filtered.sort((a, b) => b.amount - a.amount);
+                } else if (this.filters.sortBy === 'amount-asc') {
+                    filtered.sort((a, b) => a.amount - b.amount);
+                }
+                
+                return filtered;
+            },
+            // 渲染應用列表
+            renderApplications: function() {
+                const filteredApps = this.getFilteredApplications();
+                const appListContainer = document.getElementById('application-list');
+                
+                // 清空現有內容
+                appListContainer.innerHTML = '';
+                
+                if (filteredApps.length === 0) {
+                    appListContainer.innerHTML = `
+                        <div class="p-8 text-center text-gray-500">
+                            <i class="fas fa-inbox text-4xl mb-2"></i>
+                            <p>目前沒有符合條件的申請</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // 重新渲染
+                filteredApps.forEach(app => {
+                    const appElement = document.createElement('div');
+                    appElement.className = `bg-white rounded-lg shadow-md overflow-hidden mb-4 transition-all hover:shadow-lg fade-in`;
+                    appElement.innerHTML = `
+                        <div class="border-l-4 ${app.status === 'PENDING' ? 'border-yellow-500' : app.status === 'APPROVED' ? 'border-green-500' : 'border-red-500'}">
+                            <div class="p-4">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="font-bold text-lg flex items-center">
+                                            ${app.purposeOfClaim}
+                                            ${app.isUrgent ? '<span class="ml-2 bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">急件</span>' : ''}
+                                        </h3>
+                                        <p class="text-gray-600 text-sm mt-1">
+                                            <i class="fas fa-user mr-1"></i> ${app.employeeFullName} (${app.employeeId}) •
+                                            <i class="fas fa-building mr-1"></i> ${app.departmentTeam} •
+                                            <i class="far fa-clock mr-1"></i> ${app.dateOfSubmission}
+                                        </p>
+                                        <p class="text-gray-500 text-xs mt-1">
+                                            <i class="fas fa-tag mr-1"></i> ${app.expenseCategory} •
+                                            <i class="far fa-calendar mr-1"></i> Expense Date: ${app.dateOfExpense}
+                                        </p>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-2xl font-bold ${app.totalAmountClaimed > 1000 ? 'text-red-600' : 'text-gray-800'}">
+                                            $${app.totalAmountClaimed.toLocaleString()}
+                                        </span>
+                                        <p class="text-xs text-gray-500">Total Claimed</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3 flex flex-wrap gap-2">
+                                    ${app.attachments.map(att => `
+                                        <span class="inline-flex items-center bg-blue-50 text-blue-800 text-xs px-2 py-1 rounded">
+                                            <i class="fas fa-paperclip mr-1"></i> ${att.name}
+                                        </span>
+                                    `).join('')}
+                                </div>
+                                
+                                <div class="mt-4 flex justify-between items-center">
+                                    <span class="text-sm ${app.status === 'PENDING' ? 'status-pending' : app.status === 'APPROVED' ? 'status-approved' : 'status-rejected'}">
+                                        <i class="fas ${app.status === 'PENDING' ? 'fa-clock' : app.status === 'APPROVED' ? 'fa-check-circle' : 'fa-times-circle'} mr-1"></i>
+                                        ${this.getStatusName(app.status)}
+                                    </span>
+                                    <div>
+                                        <button onclick="appState.showApplicationDetail('${app.id}')" class="text-blue-600 hover:text-blue-800 text-sm font-medium mr-2">
+                                            <i class="fas fa-eye mr-1"></i> 詳細
+                                        </button>
+                                        ${app.status === 'PENDING' && appState.currentUser.role === 'headmaster' ? `
+                                            <button onclick="event.stopPropagation(); appState.showApproveModal('${app.id}')" class="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1 rounded">
+                                                <i class="fas fa-check mr-1"></i> 核准
+                                            </button>
+                                            <button onclick="event.stopPropagation(); appState.showRejectModal('${app.id}')" class="ml-2 bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1 rounded">
+                                                <i class="fas fa-times mr-1"></i> 拒絕
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    appListContainer.appendChild(appElement);
+                });
+                
+                console.log('申請列表已重新渲染');
+            },
+            // 狀態名稱映射
+            getStatusName: function(statusCode) {
+                const statuses = {
+                    'PENDING': '審核中',
+                    'APPROVED': '已核准',
+                    'REJECTED': '已拒絕'
+                };
+                return statuses[statusCode] || statusCode;
+            },
+            // 日期格式化
+            formatDate: function(dateString) {
+                const date = new Date(dateString);
+                return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            },
+            // 顯示申請詳情
+            showApplicationDetail: function(appId) {
+                const app = this.applications.find(a => a.id === appId);
+                if (!app) return;
+                
+                const detailModal = document.getElementById('detail-modal');
+                const detailContent = document.getElementById('detail-content');
+                
+                detailContent.innerHTML = `
+                    <div class="bg-white rounded-lg p-6 max-w-3xl mx-auto">
+                        <div class="flex justify-between items-start mb-4">
+                            <h3 class="text-2xl font-bold">${app.purposeOfClaim}</h3>
+                            <button onclick="appState.hideModal('detail-modal')" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <p class="text-sm text-gray-500">Employee Name</p>
+                                <p class="font-medium">${app.employeeFullName}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Employee ID</p>
+                                <p class="font-medium">${app.employeeId}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Department/Team</p>
+                                <p class="font-medium">${app.departmentTeam}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Expense Category</p>
+                                <p class="font-medium">${app.expenseCategory}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Date of Submission</p>
+                                <p class="font-medium">${app.dateOfSubmission}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Date of Expense</p>
+                                <p class="font-medium">${app.dateOfExpense}</p>
+                            </div>
+                            <div class="md:col-span-2">
+                                <p class="text-sm text-gray-500">Total Amount Claimed</p>
+                                <p class="font-medium text-2xl ${app.totalAmountClaimed > 1000 ? 'text-red-600' : 'text-gray-800'}">$${app.totalAmountClaimed.toLocaleString()}</p>
+                            </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <h4 class="font-bold text-lg mb-2 border-b pb-2">Purpose of Claim</h4>
+                            <p class="text-gray-700">
+                                ${app.purposeOfClaim}
+                            </p>
+                            ${app.isUrgent ? `
+                                <div class="mt-3 p-3 bg-red-50 text-red-800 rounded">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i>此申請標記為急件，請優先處理
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <div class="mb-6">
+                            <h4 class="font-bold text-lg mb-2 border-b pb-2">Itemized Breakdown</h4>
+                            <pre class="text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded">${app.itemizedBreakdown || 'No breakdown provided'}</pre>
+                        </div>
+                        
+                        <div class="mb-6">
+                            <h4 class="font-bold text-lg mb-3 border-b pb-2">附件</h4>
+                            ${app.attachments.length > 0 ? `
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    ${app.attachments.map(att => `
+                                        <div class="border rounded p-3 hover:bg-gray-50">
+                                            <div class="flex items-center">
+                                                <i class="fas fa-paperclip text-gray-400 mr-3"></i>
+                                                <div>
+                                                    <p class="font-medium">${att.name}</p>
+                                                    <p class="text-sm text-gray-500">PDF • 1.2MB</p>
+                                                </div>
+                                            </div>
+                                            <button class="mt-2 text-blue-600 text-sm hover:text-blue-800 flex items-center">
+                                                <i class="fas fa-download mr-1"></i> 下載
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : `
+                                <p class="text-gray-500 italic">本申請沒有附加文件</p>
+                            `}
+                        </div>
+                        
+                        <div class="mb-6">
+                            <h4 class="font-bold text-lg mb-2 border-b pb-2">處理狀態</h4>
+                            <div class="flex items-center ${app.status === 'PENDING' ? 'status-pending' : app.status === 'APPROVED' ? 'status-approved' : 'status-rejected'}">
+                                <i class="fas ${app.status === 'PENDING' ? 'fa-clock' : app.status === 'APPROVED' ? 'fa-check-circle' : 'fa-times-circle'} text-xl mr-3"></i>
+                                <div>
+                                    <p class="font-bold">${this.getStatusName(app.status)}</p>
+                                    ${app.status === 'REJECTED' && app.rejectionReason ? `
+                                        <p class="text-sm mt-1">拒絕原因: ${app.rejectionReason}</p>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${app.status === 'PENDING' && appState.currentUser.role === 'headmaster' ? `
+                            <div class="flex justify-end gap-3">
+                                <button onclick="appState.showRejectModal('${app.id}')" class="px-4 py-2 bg-red-100 text-red-800 hover:bg-red-200 rounded-lg font-medium">
+                                    <i class="fas fa-times mr-2"></i> 拒絕
+                                </button>
+                                <button onclick="appState.showApproveModal('${app.id}')" class="px-4 py-2 bg-green-100 text-green-800 hover:bg-green-200 rounded-lg font-medium">
+                                    <i class="fas fa-check mr-2"></i> 核准
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                detailModal.classList.remove('hidden');
+                console.log(`顯示申請詳情: ${appId}`);
+            },
+            // 顯示核准模態框
+            showApproveModal: function(appId) {
+                const app = this.applications.find(a => a.id === appId);
+                if (!app) return;
+                
+                document.getElementById('approve-app-id').value = appId;
+                document.getElementById('approve-title').textContent = `核准申請: ${app.title}`;
+                
+                const approveModal = document.getElementById('approve-modal');
+                approveModal.classList.remove('hidden');
+                console.log(`顯示核准模態框 for ${appId}`);
+            },
+            // 顯示拒絕模態框
+            showRejectModal: function(appId) {
+                const app = this.applications.find(a => a.id === appId);
+                if (!app) return;
+                
+                document.getElementById('reject-app-id').value = appId;
+                document.getElementById('reject-title').textContent = `拒絕申請: ${app.title}`;
+                
+                const rejectModal = document.getElementById('reject-modal');
+                rejectModal.classList.remove('hidden');
+                console.log(`顯示拒絕模態框 for ${appId}`);
+            },
+            // 隱藏模態框
+            hideModal: function(modalId) {
+                document.getElementById(modalId).classList.add('hidden');
+                console.log(`隱藏模態框: ${modalId}`);
+            },
+            // 核准申請
+            approveApplication: function() {
+                const appId = document.getElementById('approve-app-id').value;
+                const note = document.getElementById('approve-note').value.trim();
+                
+                const appIndex = this.applications.findIndex(a => a.id === appId);
+                if (appIndex === -1) return;
+                
+                this.applications[appIndex].status = 'APPROVED';
+                if (note) {
+                    this.applications[appIndex].approvalNote = note;
+                }
+                
+                // 更新預算數據
+                this.budgetData.used += this.applications[appIndex].amount;
+                this.budgetData.remaining -= this.applications[appIndex].amount;
+                
+                this.hideModal('approve-modal');
+                this.renderApplications();
+                this.updateBudgetDisplay();
+                
+                console.log(`已核准申請 ${appId}`, note ? `備註: ${note}` : '無備註');
+                alert('申請已核准!');
+            },
+            // 拒絕申請
+            rejectApplication: function() {
+                const appId = document.getElementById('reject-app-id').value;
+                const reason = document.getElementById('reject-reason').value.trim();
+                
+                if (reason.length < 20) {
+                    alert('拒絕原因需至少20字!');
+                    return;
+                }
+                
+                const appIndex = this.applications.findIndex(a => a.id === appId);
+                if (appIndex === -1) return;
+                
+                this.applications[appIndex].status = 'REJECTED';
+                this.applications[appIndex].rejectionReason = reason;
+                
+                this.hideModal('reject-modal');
+                this.renderApplications();
+                
+                console.log(`已拒絕申請 ${appId}`, `原因: ${reason}`);
+                alert('申請已拒絕!');
+            },
+            // 更新預算顯示
+            updateBudgetDisplay: function() {
+                const budgetDisplay = document.getElementById('budget-display');
+                if (!budgetDisplay) return;
+                
+                budgetDisplay.innerHTML = `
+                    <div class="bg-white p-4 rounded-lg shadow mb-6">
+                        <h3 class="font-bold text-lg mb-4">部門預算概覽</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span>總預算</span>
+                                    <span>$${this.budgetData.total.toLocaleString()}</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-blue-600 h-2 rounded-full" style="width: ${(this.budgetData.used / this.budgetData.total) * 100}%"></div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="bg-gray-50 p-3 rounded">
+                                    <p class="text-xs text-gray-500">已使用</p>
+                                    <p class="text-xl font-bold">$${this.budgetData.used.toLocaleString()}</p>
+                                    <p class="text-xs text-gray-500">${Math.round((this.budgetData.used / this.budgetData.total) * 100)}%</p>
+                                </div>
+                                <div class="bg-gray-50 p-3 rounded">
+                                    <p class="text-xs text-gray-500">剩餘</p>
+                                    <p class="text-xl font-bold ${this.budgetData.remaining < 50000 ? 'text-red-600' : 'text-green-600'}">
+                                        $${this.budgetData.remaining.toLocaleString()}
+                                    </p>
+                                    <p class="text-xs text-gray-500">${Math.round((this.budgetData.remaining / this.budgetData.total) * 100)}%</p>
+                                </div>
+                            </div>
+                            ${this.budgetData.remaining < (this.budgetData.total * 0.1) ? `
+                                <div class="bg-red-50 text-red-800 p-3 rounded text-sm">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                                    可用預算低於10%，請留意支出控制
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                console.log('預算顯示已更新');
+            },
+            // 更改過濾器
+            changeFilter: function(type, value) {
+                this.filters[type] = value;
+                this.renderApplications();
+                console.log(`過濾器已更新: ${type} = ${value}`);
+            },
+            // 更改排序
+            changeSort: function(sortBy) {
+                this.filters.sortBy = sortBy;
+                this.renderApplications();
+                console.log(`排序已更改: ${sortBy}`);
+            },
+            // 下載報表
+            downloadReport: function() {
+                console.log('開始下載報表...');
+                // 模擬報表生成和下載
+                alert('報表下載功能已觸發 (實際系統會產生真實文件)');
+            }
+        };
+        
+        // 初始化應用程式
+        document.addEventListener('DOMContentLoaded', function() {
+            appState.init();
+        });
+    </script>
+
+    <!-- 主頁面佈局 -->
+    <div class="min-h-screen">
+        <!-- 導航欄 -->
+        <nav class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 flex items-center">
+                            <i class="fas fa-file-invoice-dollar text-blue-600 text-2xl mr-2"></i>
+                            <span class="text-xl font-bold text-gray-900">ClaimMaster</span>
+                        </div>
+                        <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                            <a href="#" class="border-blue-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">申請看板</a>
+                            <a href="#" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">統計報表</a>
+                            <a href="#" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">設定</a>
+                        </div>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:items-center">
+                        <button class="bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none">
+                            <span class="sr-only">通知</span>
+                            <i class="fas fa-bell"></i>
+                        </button>
+                        
+                        <div class="ml-3 relative">
+                            <div>
+                                <button class="bg-white rounded-full flex text-sm focus:outline-none">
+                                    <span class="sr-only">開啟使用者選單</span>
+                                    <div class="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                        <i class="fas fa-user text-blue-600"></i>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="-mr-2 flex items-center sm:hidden">
+                        <button class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none">
+                            <span class="sr-only">開啟主選單</span>
+                            <i class="fas fa-bars"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- 主內容區 -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">申請看板</h1>
+                    <p class="mt-1 text-sm text-gray-500">查看和處理所有經費申請</p>
+                </div>
+                <div class="mt-4 md:mt-0">
+                    <button onclick="appState.downloadReport()" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">
+                        <i class="fas fa-download mr-2"></i> 下載報表
+                    </button>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <!-- 側邊欄/篩選器 -->
+                <div class="lg:col-span-1">
+                    <div id="budget-display" class="bg-white p-4 rounded-lg shadow mb-6">
+                        <!-- 預算資訊將由JavaScript動態生成 -->
+                        <div class="animate-pulse">
+                            <div class="h-8 bg-gray-200 rounded w-3/4 mb-4"></div>
+                            <div class="h-2 bg-gray-200 rounded mb-2 w-full"></div>
+                            <div class="h-2 bg-gray-200 rounded mb-4 w-full"></div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="h-16 bg-gray-200 rounded"></div>
+                                <div class="h-16 bg-gray-200 rounded"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white p-4 rounded-lg shadow">
+                        <h3 class="font-bold text-lg mb-3">過濾條件</h3>
+                        
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">狀態</label>
+                            <select onchange="appState.changeFilter('status', this.value)" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                <option value="all">所有狀態</option>
+                                <option value="pending">待處理</option>
+                                <option value="approved">已核准</option>
+                                <option value="rejected">已拒絕</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">部門</label>
+                            <select onchange="appState.changeFilter('department', this.value)" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                <option value="all">所有部門</option>
+                                <option value="ACADEMIC">教務處</option>
+                                <option value="ADMIN">行政處</option>
+                                <option value="FACILITY">總務處</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">排序方式</label>
+                            <select onchange="appState.changeSort(this.value)" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                <option value="date-desc">申請日期 (新到舊)</option>
+                                <option value="date-asc">申請日期 (舊到新)</option>
+                                <option value="amount-desc">金額 (高到低)</option>
+                                <option value="amount-asc">金額 (低到高)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="pt-4 border-t">
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700">僅顯示急件</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 申請列表 -->
+                <div class="lg:col-span-3">
+                    <div id="application-list">
+                        <!-- 申請卡片將由JavaScript動態生成 -->
+                        <div class="animate-pulse space-y-4">
+                            <div class="h-32 bg-gray-200 rounded"></div>
+                            <div class="h-32 bg-gray-200 rounded"></div>
+                            <div class="h-32 bg-gray-200 rounded"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 申請詳情模態框 -->
+    <div id="detail-modal" class="hidden fixed inset-0 z-50 overflow-y-auto p-4 bg-black bg-opacity-50">
+        <div class="relative w-full max-w-4xl mx-auto my-8 fade-in" onclick="event.stopPropagation()">
+            <div class="bg-white rounded-lg shadow-xl">
+                <div id="detail-content">
+                    <!-- 詳情內容將由JavaScript動態生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 核准模態框 -->
+    <div id="approve-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <input type="hidden" id="approve-app-id">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <i class="fas fa-check text-green-600"></i>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                            <h3 id="approve-title" class="text-lg leading-6 font-medium text-gray-900 mb-1">核准申請</h3>
+                            <div class="mt-2">
+                                <p class="text-sm text-gray-500">您即將核准此申請，請確認以下內容無誤。</p>
+                            </div>
+                            <div class="mt-4">
+                                <label for="approve-note" class="block text-sm font-medium text-gray-700">核准備註 (選填)</label>
+                                <textarea id="approve-note" rows="3" class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button onclick="appState.approveApplication()" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 sm:ml-3 sm:w-auto sm:text-sm">
+                        <i class="fas fa-check mr-2"></i> 確認核准
+                    </button>
+                    <button onclick="appState.hideModal('approve-modal')" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        <i class="fas fa-times mr-2"></i> 取消
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 拒絕模態框 -->
+    <div id="reject-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <input type="hidden" id="reject-app-id">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <i class="fas fa-times text-red-600"></i>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                            <h3 id="reject-title" class="text-lg leading-6 font-medium text-gray-900 mb-1">拒絕申請</h3>
+                            <div class="mt-2">
+                                <p class="text-sm text-gray-500">請填寫拒絕原因 (至少20字)，此內容會通知申請人。</p>
+                            </div>
+                            <div class="mt-4">
+                                <label for="reject-reason" class="block text-sm font-medium text-gray-700">拒絕原因 *</label>
+                                <textarea id="reject-reason" rows="3" class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md" required></textarea>
+                                <p class="mt-1 text-xs text-gray-500">請詳細說明拒絕理由，最少需要20字。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button onclick="appState.rejectApplication()" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 sm:ml-3 sm:w-auto sm:text-sm">
+                        <i class="fas fa-times mr-2"></i> 確認拒絕
+                    </button>
+                    <button onclick="appState.hideModal('reject-modal')" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        <i class="fas fa-arrow-left mr-2"></i> 取消
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 測試清單和使用建議區塊 -->
+    <!--
+    ============================
+    測試清單：
+    1. 過濾功能 - 測試不同狀態和部門的過濾是否正確
+    2. 排序功能 - 測試按日期和金額排序是否正確
+    3. 申請詳情 - 點擊卡片查看詳細資訊
+    4. 核准流程 - 測試核准申請並確認狀態更新
+    5. 拒絕流程 - 測試拒絕申請並確認必須填寫原因
+    6. 預算顯示 - 確認預算計算和顯示正確
+    7. 報表下載 - 點擊下載按鈕測試功能
+    
+    使用建議：
+    1. 在瀏覽器中直接打開此HTML文件即可測試原型
+    2. 打開開發者工具查看console.log輸出以了解交互過程
+    3. 測試不同用戶角色(校長/教師)的視圖差異
+    
+    改進建議：
+    1. 添加更多範例申請數據以豐富測試場景
+    2. 實現附件預覽功能
+    3. 添加批量操作功能處理多個申請
+    4. 實現搜索功能以便快速查找特定申請
+    5. 添加響應式設計改進移動端體驗
+    ============================
+    -->
+</body>
+</html>

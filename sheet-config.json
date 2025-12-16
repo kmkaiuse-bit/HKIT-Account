@@ -1,0 +1,25 @@
+{
+  "sheetId": "1yB0O7Kdx9y3V6LCZ4PuGuekJiZviYgj9JP2Fe-FT0kY",
+  "sheetName": "Form Responses 1",
+  "fieldMapping": {
+    "Timestamp": "timestamp",
+    "Employee Full Name": "employee_full_name",
+    "Employee ID": "employee_id",
+    "Department/Team": "department_team",
+    "Date of Submission": "date_of_submission",
+    "Purpose of Claim (Brief Description)": "purpose_of_claim",
+    "Expense Category": "expense_category",
+    "Date of Expense": "date_of_expense",
+    "Total Amount Claimed (in local currency)": "total_amount_claimed",
+    "Please provide an itemized breakdown of expenses (if multiple items under one claim)": "itemized_breakdown",
+    "Upload Receipts/Supporting Documents (e.g., invoices, tickets)": "receipt_urls",
+    "I confirm that these expenses are legitimate, incurred for business purposes, and comply with the company's expense policy.": "policy_confirmation",
+    "For Office Use Only: Approval Status": "approval_status"
+  },
+  "approvalStatusColumn": 13,
+  "comments": {
+    "howToSwitch": "要切換到另一個 Google Sheet，只需修改 sheetId 和 fieldMapping",
+    "sheetId": "從 Google Sheet URL 複製: https://docs.google.com/spreadsheets/d/{THIS_IS_THE_SHEET_ID}/edit",
+    "fieldMapping": "如果新 Sheet 的欄位名稱不同，更新這個對應表"
+  }
+}
