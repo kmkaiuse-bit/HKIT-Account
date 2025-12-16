@@ -1,0 +1,121 @@
+# Mock Data for Expense Claim Testing (10 Records)
+
+## 使用說明
+1. 複製下面的數據（從第一筆的 Timestamp 開始）
+2. 打開你的 Google Sheet
+3. 選擇第二行第一列（A2，因為第一行是標題）
+4. 按 Ctrl+V 貼上
+5. 數據會自動填入對應的欄位
+
+## 欄位順序確認
+確保你的 Google Sheet 第一行（標題）的順序是：
+1. Timestamp
+2. Employee Full Name
+3. Employee ID
+4. Department/Team
+5. Date of Submission
+6. Purpose of Claim (Brief Description)
+7. Expense Category
+8. Date of Expense
+9. Total Amount Claimed (in local currency)
+10. Please provide an itemized breakdown of expenses (if multiple items under one claim)
+11. Upload Receipts/Supporting Documents (e.g., invoices, tickets)
+12. I confirm that these expenses are legitimate, incurred for business purposes, and comply with the company's expense policy.
+13. For Office Use Only: Approval Status
+
+---
+
+## 複製以下數據（Tab 分隔，可直接貼到 Google Sheets）
+
+2025-12-10 09:15:30	John Wong	EMP001	IT Department	2025-12-10	Business travel to client meeting in Shenzhen	Travel	2025-12-08	850.50	Flight ticket: $600, Hotel (1 night): $200, Meals: $50.50	https://drive.google.com/file/example1	Yes	PENDING
+
+2025-12-11 10:30:45	Sarah Lee	EMP002	Marketing	2025-12-11	Purchase of Adobe Creative Cloud licenses for design team	Software	2025-12-09	1200.00	Adobe Creative Cloud (5 licenses x $240): $1200	https://drive.google.com/file/example2	Yes	PENDING
+
+2025-12-12 14:20:15	Michael Chan	EMP003	Operations	2025-12-12	Office supplies and equipment for new workstation	Office Supplies	2025-12-11	350.00	Printer cartridges: $120, Stationery: $80, Desk organizer: $150	https://drive.google.com/file/example3	Yes	APPROVED
+
+2025-12-13 11:45:00	Emily Tam	EMP004	HR Department	2025-12-13	Team building event catering and venue rental	Event	2025-12-12	2500.00	Venue rental: $1500, Catering (50 people): $1000	https://drive.google.com/file/example4	Yes	PENDING
+
+2025-12-14 09:00:20	David Ng	EMP005	Finance	2025-12-14	Professional training course enrollment	Training	2025-12-13	4800.00	CPA certification course: $4800	https://drive.google.com/file/example5	Yes	PENDING
+
+2025-12-09 16:30:10	Lisa Chen	EMP006	IT Department	2025-12-09	Server maintenance and hardware upgrade	Equipment	2025-12-08	3200.00	SSD drives (4x): $1200, RAM modules: $800, Cooling system: $1200	https://drive.google.com/file/example6	Yes	APPROVED
+
+2025-12-08 13:15:55	Peter Lam	EMP007	Marketing	2025-12-08	Social media advertising campaign	Advertising	2025-12-07	1500.00	Facebook Ads: $800, Google Ads: $700	https://drive.google.com/file/example7	Yes	REJECTED
+
+2025-12-15 10:10:30	Angela Yip	EMP008	Operations	2025-12-15	Monthly transportation and parking fees	Transportation	2025-12-14	450.00	Parking (30 days): $300, Fuel: $150	https://drive.google.com/file/example8	Yes	PENDING
+
+2025-12-07 15:45:20	Raymond Chu	EMP009	Sales	2025-12-07	Client entertainment and business lunch	Entertainment	2025-12-06	680.00	Restaurant (4 people): $520, Transportation: $160	https://drive.google.com/file/example9	Yes	APPROVED
+
+2025-12-16 08:30:00	Fiona Kwok	EMP010	HR Department	2025-12-16	Recruitment advertising on job portals	Recruitment	2025-12-15	2200.00	JobsDB Premium: $1200, LinkedIn Job Post: $1000	https://drive.google.com/file/example10	Yes	PENDING
+
+---
+
+## 數據說明
+
+### 狀態分布
+- PENDING (待處理): 6 筆
+- APPROVED (已核准): 3 筆
+- REJECTED (已拒絕): 1 筆
+
+### 金額分布
+- 小額 (< $1000): 4 筆
+- 中額 ($1000-$3000): 4 筆
+- 大額 (> $3000): 2 筆
+
+### 部門分布
+- IT Department: 2 筆
+- Marketing: 2 筆
+- Operations: 2 筆
+- HR Department: 2 筆
+- Finance: 1 筆
+- Sales: 1 筆
+
+### 費用類別
+- Travel (差旅)
+- Software (軟體)
+- Office Supplies (辦公用品)
+- Event (活動)
+- Training (培訓)
+- Equipment (設備)
+- Advertising (廣告)
+- Transportation (交通)
+- Entertainment (招待)
+- Recruitment (招聘)
+
+---
+
+## 測試建議
+
+使用這些數據可以測試：
+
+1. **篩選功能**
+   - 按狀態篩選（6 筆待處理、3 筆已核准、1 筆已拒絕）
+   - 按金額閾值（金額 > $1000 會顯示紅色）
+
+2. **搜尋功能**
+   - 搜尋員工：John, Sarah, Michael
+   - 搜尋部門：IT, Marketing, HR
+   - 搜尋類別：Travel, Software
+
+3. **核准/拒絕功能**
+   - 選擇 PENDING 的申請進行核准
+   - 選擇 PENDING 的申請進行拒絕（需填寫 20 字原因）
+
+4. **排序功能**
+   - 按日期排序（最新到最舊）
+   - 按金額排序（高到低）
+
+---
+
+## 貼到 Google Sheet 的步驟
+
+1. 打開你的 Google Sheet
+2. 確認第一行是標題欄位
+3. 點擊 A2 儲存格（第二行第一列）
+4. 複製上面的數據（10 行，從 "2025-12-10 09:15:30" 開始）
+5. 按 Ctrl+V 貼上
+6. 數據會自動分散到各個欄位（因為是 Tab 分隔）
+7. 重新整理網站頁面（F5）查看數據
+
+---
+
+如果貼上後欄位對不齊，可能需要調整 Google Sheet 的分隔符號設定。
