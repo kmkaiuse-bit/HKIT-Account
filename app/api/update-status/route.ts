@@ -47,8 +47,9 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('API Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update status';
     return NextResponse.json(
-      { success: false, error: 'Failed to update status' },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

@@ -7,8 +7,9 @@ export async function GET() {
     return NextResponse.json({ success: true, data: applications });
   } catch (error) {
     console.error('API Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch applications';
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch applications' },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
