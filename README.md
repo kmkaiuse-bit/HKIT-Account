@@ -1,13 +1,13 @@
-# 費用申請審批看板 Expense Claim Approval Dashboard
+# 付款申請審批看板 Payment Request Approval Dashboard
 
-簡潔的申請審批系統，支援快速切換不同的 Google Sheets。
+簡潔的付款申請審批系統，支援快速切換不同的 Google Sheets。
 
 ## ✨ 主要功能
 
-- ✅ 從 Google Sheets 讀取費用申請記錄
+- ✅ 從 Google Sheets 讀取付款申請記錄
 - ✅ 核准/拒絕申請（直接更新 Google Sheet）
 - ✅ 狀態篩選（待處理/已核准/已拒絕）
-- ✅ 快速搜尋（姓名、ID、部門、申請目的）
+- ✅ 快速搜尋（員工姓名、付款詳情、中心、課程、學期）
 - ✅ **支援切換不同 Google Sheets**（只需修改配置文件）
 
 ---
@@ -124,18 +124,17 @@ GOOGLE_SHEET_ID=NEW_SHEET_ID_HERE
 確保新 Sheet 包含以下欄位（或更新 `fieldMapping`）：
 
 1. Timestamp
-2. Employee Full Name
-3. Employee ID
-4. Department/Team
-5. Date of Submission
-6. Purpose of Claim
-7. Expense Category
-8. Date of Expense
-9. Total Amount Claimed
-10. Itemized Breakdown
-11. Upload Receipts
-12. Policy Confirmation
-13. **Approval Status** ← 系統會更新這個欄位
+2. Date
+3. Staff's Name
+4. Payment Details
+5. Payment Total Amount
+6. Remark
+7. Centre
+8. Programme
+9. Term
+10. EDB Funding
+11. Estimated payment date
+12. **Approval Status** ← 系統會更新這個欄位
 
 ---
 
@@ -163,20 +162,20 @@ account-ui/
 
 ### 查看申請
 
-- 自動載入所有申請記錄
+- 自動載入所有付款申請記錄
 - 按狀態篩選：全部 / 待處理 / 已核准 / 已拒絕
-- 搜尋框：輸入員工姓名、ID、部門或申請目的
+- 搜尋框：輸入員工姓名、付款詳情、中心、課程或學期
 
 ### 核准申請
 
-1. 找到待處理的申請
+1. 找到待處理的付款申請
 2. 點擊「✓ 核准」按鈕
 3. 確認操作
 4. 系統會自動更新 Google Sheet 的審批狀態欄位
 
 ### 拒絕申請
 
-1. 找到待處理的申請
+1. 找到待處理的付款申請
 2. 點擊「✗ 拒絕」按鈕
 3. 填寫拒絕原因（至少 20 字）
 4. 確認操作
@@ -185,10 +184,10 @@ account-ui/
 ### 查看詳情
 
 點擊「查看詳情」按鈕可以展開完整資訊：
-- 時間戳記
-- 費用日期
-- 收據/文件連結
-- 政策確認
+- 提交時間戳記
+- 預計付款日期
+- 完整付款詳情
+- 額外備註
 
 ---
 
@@ -196,7 +195,7 @@ account-ui/
 
 ### GET /api/applications
 
-讀取所有申請記錄。
+讀取所有付款申請記錄。
 
 **回應範例：**
 ```json
@@ -205,8 +204,11 @@ account-ui/
   "data": [
     {
       "rowIndex": 2,
-      "employee_full_name": "John Doe",
-      "total_amount_claimed": 850,
+      "staff_name": "張三",
+      "payment_total_amount": 5000,
+      "payment_details": "購買教學用品",
+      "centre": "觀塘中心",
+      "programme": "STEM課程",
       "approval_status": "PENDING",
       ...
     }
@@ -231,7 +233,7 @@ account-ui/
 {
   "rowIndex": 3,
   "status": "REJECTED",
-  "rejectionReason": "預算不足，請重新規劃申請項目"
+  "rejectionReason": "付款詳情不清楚，請提供更詳細的說明"
 }
 ```
 
@@ -302,10 +304,17 @@ account-ui/
 
 系統現在已經可以使用了！
 
-- 📋 查看申請列表
-- ✅ 核准/拒絕申請
+- 📋 查看付款申請列表
+- ✅ 核准/拒絕付款申請
 - 🔄 自動同步到 Google Sheets
 - 🔀 隨時切換不同的 Sheet（修改 `sheet-config.json`）
+
+---
+
+## 📝 表單連結
+
+本系統對應的 Google Form：
+https://docs.google.com/forms/d/e/1FAIpQLSfzb_rsOkqMb5XCcIfVlXOFiuto5COtOTIuD6r32IVoFG2K9w/viewform
 
 ---
 

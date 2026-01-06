@@ -1,0 +1,6 @@
+Timestamp,Date,Staff's Name,Payment Details,Payment Total Amount,Remark,Centre,Programme,Term,EDB Funding,Estimated payment date,For Office Use Only: Approval Status
+2026-01-06 10:30:00,2026-01-05,張三,購買 STEM 教學用品 - 包括樂高套裝、機器人組件,5000,,觀塘中心,STEM課程,2025-2026 第二學期,EDB Funding A,2026-01-15,PENDING
+2026-01-06 11:15:00,2026-01-06,李四,支付外聘導師費用 - 英語會話課程,8000,需要在1月底前完成付款,屯門中心,英語課程,2025-2026 第二學期,EDB Funding B,2026-01-25,PENDING
+2026-01-06 14:20:00,2026-01-04,王五,租用場地費用 - 戶外活動,3500,,沙田中心,戶外活動計劃,2025-2026 第二學期,Non-EDB,2026-01-20,APPROVED
+2026-01-06 15:45:00,2026-01-05,陳六,購買文具用品及影印紙張,1200,辦公室日常用品補充,九龍城中心,行政支援,2025-2026 第二學期,Non-EDB,2026-01-10,PENDING
+2026-01-06 16:30:00,2026-01-03,林七,支付活動保險費用,2800,,荃灣中心,暑期活動,2025-2026 第二學期,EDB Funding C,2026-01-18,REJECTED

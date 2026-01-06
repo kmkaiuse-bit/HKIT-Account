@@ -5,17 +5,16 @@ import { useEffect, useState } from 'react';
 interface Application {
   rowIndex: number;
   timestamp: string;
-  employee_full_name: string;
-  employee_id: string;
-  department_team: string;
-  date_of_submission: string;
-  purpose_of_claim: string;
-  expense_category: string;
-  date_of_expense: string;
-  total_amount_claimed: number;
-  itemized_breakdown: string;
-  receipt_urls: string;
-  policy_confirmation: string;
+  date: string;
+  staff_name: string;
+  payment_details: string;
+  payment_total_amount: number;
+  remark: string;
+  centre: string;
+  programme: string;
+  term: string;
+  edb_funding: string;
+  estimated_payment_date: string;
   approval_status: string;
 }
 
@@ -48,10 +47,11 @@ export default function Dashboard() {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(app =>
-        app.employee_full_name.toLowerCase().includes(query) ||
-        app.employee_id.toLowerCase().includes(query) ||
-        app.purpose_of_claim.toLowerCase().includes(query) ||
-        app.department_team.toLowerCase().includes(query)
+        app.staff_name.toLowerCase().includes(query) ||
+        app.payment_details.toLowerCase().includes(query) ||
+        app.centre.toLowerCase().includes(query) ||
+        app.programme.toLowerCase().includes(query) ||
+        app.term.toLowerCase().includes(query)
       );
     }
 
@@ -73,7 +73,7 @@ export default function Dashboard() {
   }
 
   async function handleApprove(app: Application) {
-    if (!confirm(`確認核准 ${app.employee_full_name} 的申請？`)) return;
+    if (!confirm(`確認核准 ${app.staff_name} 的付款申請？`)) return;
 
     setActionLoading(true);
     try {
@@ -173,8 +173,8 @@ export default function Dashboard() {
       {/* 標題欄 */}
       <div className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">費用申請審批看板</h1>
-          <p className="text-sm text-gray-500 mt-1">Expense Claim Approval Dashboard</p>
+          <h1 className="text-2xl font-bold text-gray-900">付款申請審批看板</h1>
+          <p className="text-sm text-gray-500 mt-1">Payment Request Approval Dashboard</p>
         </div>
       </div>
 
@@ -201,7 +201,7 @@ export default function Dashboard() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="員工姓名、ID、部門、申請目的..."
+                placeholder="員工姓名、付款詳情、中心、課程、學期..."
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -234,17 +234,19 @@ export default function Dashboard() {
                     <div className="flex-1">
                       <div className="flex items-start justify-between">
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">{app.purpose_of_claim}</h3>
+                          <h3 className="text-lg font-semibold text-gray-900">{app.payment_details}</h3>
                           <div className="mt-2 space-y-1 text-sm text-gray-600">
-                            <p>👤 {app.employee_full_name} ({app.employee_id})</p>
-                            <p>🏢 {app.department_team}</p>
-                            <p>🏷️ {app.expense_category}</p>
-                            <p>📅 提交日期: {app.date_of_submission}</p>
+                            <p>👤 {app.staff_name}</p>
+                            <p>🏫 {app.centre}</p>
+                            <p>📚 {app.programme}</p>
+                            <p>📅 日期: {app.date}</p>
+                            <p>📆 學期: {app.term}</p>
+                            <p>💰 資助: {app.edb_funding}</p>
                           </div>
                         </div>
                         <div className="text-right ml-4">
-                          <p className={`text-2xl font-bold ${app.total_amount_claimed > 1000 ? 'text-red-600' : 'text-gray-900'}`}>
-                            ${app.total_amount_claimed.toLocaleString()}
+                          <p className={`text-2xl font-bold ${app.payment_total_amount > 1000 ? 'text-red-600' : 'text-gray-900'}`}>
+                            ${app.payment_total_amount.toLocaleString()}
                           </p>
                           <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium mt-2 ${getStatusColor(app.approval_status)}`}>
                             {getStatusText(app.approval_status)}
@@ -252,11 +254,11 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      {/* 費用明細 */}
-                      {app.itemized_breakdown && (
+                      {/* 備註 */}
+                      {app.remark && (
                         <div className="mt-4 p-3 bg-gray-50 rounded">
-                          <p className="text-xs font-medium text-gray-700 mb-1">費用明細：</p>
-                          <pre className="text-sm text-gray-600 whitespace-pre-wrap">{app.itemized_breakdown}</pre>
+                          <p className="text-xs font-medium text-gray-700 mb-1">備註：</p>
+                          <pre className="text-sm text-gray-600 whitespace-pre-wrap">{app.remark}</pre>
                         </div>
                       )}
 
@@ -296,21 +298,23 @@ export default function Dashboard() {
                     <div className="mt-6 pt-6 border-t border-gray-200">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <p className="text-xs text-gray-500">時間戳記</p>
+                          <p className="text-xs text-gray-500">提交時間</p>
                           <p className="text-sm font-medium">{app.timestamp}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">費用日期</p>
-                          <p className="text-sm font-medium">{app.date_of_expense}</p>
+                          <p className="text-xs text-gray-500">預計付款日期</p>
+                          <p className="text-sm font-medium">{app.estimated_payment_date || '未指定'}</p>
                         </div>
                         <div className="md:col-span-2">
-                          <p className="text-xs text-gray-500">收據/文件</p>
-                          <p className="text-sm font-medium">{app.receipt_urls || '無附件'}</p>
+                          <p className="text-xs text-gray-500">完整付款詳情</p>
+                          <p className="text-sm font-medium whitespace-pre-wrap">{app.payment_details}</p>
                         </div>
-                        <div className="md:col-span-2">
-                          <p className="text-xs text-gray-500">政策確認</p>
-                          <p className="text-sm font-medium">{app.policy_confirmation}</p>
-                        </div>
+                        {app.remark && (
+                          <div className="md:col-span-2">
+                            <p className="text-xs text-gray-500">額外備註</p>
+                            <p className="text-sm font-medium whitespace-pre-wrap">{app.remark}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -326,9 +330,9 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">拒絕申請</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">拒絕付款申請</h3>
               <p className="text-sm text-gray-600 mb-4">
-                申請人: <span className="font-medium">{selectedApp.employee_full_name}</span>
+                申請人: <span className="font-medium">{selectedApp.staff_name}</span>
               </p>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 拒絕原因 <span className="text-red-600">*</span>（至少 20 字）

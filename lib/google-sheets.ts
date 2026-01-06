@@ -8,17 +8,16 @@ const SHEET_NAME = sheetConfig.sheetName;
 export interface Application {
   rowIndex: number;
   timestamp: string;
-  employee_full_name: string;
-  employee_id: string;
-  department_team: string;
-  date_of_submission: string;
-  purpose_of_claim: string;
-  expense_category: string;
-  date_of_expense: string;
-  total_amount_claimed: number;
-  itemized_breakdown: string;
-  receipt_urls: string;
-  policy_confirmation: string;
+  date: string;
+  staff_name: string;
+  payment_details: string;
+  payment_total_amount: number;
+  remark: string;
+  centre: string;
+  programme: string;
+  term: string;
+  edb_funding: string;
+  estimated_payment_date: string;
   approval_status: string;
 }
 
@@ -42,7 +41,7 @@ export async function getAllApplications(): Promise<Application[]> {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: `${SHEET_NAME}!A:M`, // A 到 M 列（13 個欄位）
+      range: `${SHEET_NAME}!A:L`, // A 到 L 列（12 個欄位）
     });
 
     const rows = response.data.values;
@@ -69,7 +68,7 @@ export async function getAllApplications(): Promise<Application[]> {
           let value = row[colIndex] || '';
 
           // 特殊處理：金額轉換為數字
-          if (mappedField === 'total_amount_claimed') {
+          if (mappedField === 'payment_total_amount') {
             value = parseFloat(value.toString().replace(/[^0-9.-]+/g, '')) || 0;
           }
 

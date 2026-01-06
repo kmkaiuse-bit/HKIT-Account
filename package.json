@@ -11,10 +11,10 @@
     "start": "next start",
     "lint": "next lint"
   },
-  "keywords": [],
+  "keywords": ["payment", "approval", "google-sheets", "nextjs"],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "HKIT Payment Request Approval Dashboard - A Next.js application for managing and approving payment requests via Google Sheets",
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^25.0.2",
