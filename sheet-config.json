@@ -1,25 +1,21 @@
 {
-  "sheetId": "1yB0O7Kdx9y3V6LCZ4PuGuekJiZviYgj9JP2Fe-FT0kY",
-  "sheetName": "Form Responses 1",
+  "sheetId": "1fXv08utbbU929fqviINMhyNOcTZ6_Hz4l2_XTQGiWlk",
+  "sheetName": "Sheet1",
   "fieldMapping": {
-    "Timestamp": "timestamp",
-    "Date": "date",
-    "Staff's Name": "staff_name",
-    "Payment Details": "payment_details",
-    "Payment Total Amount": "payment_total_amount",
-    "Remark": "remark",
-    "Centre": "centre",
-    "Programme": "programme",
-    "Term": "term",
-    "EDB Funding": "edb_funding",
-    "Estimated payment date": "estimated_payment_date",
-    "For Office Use Only: Approval Status": "approval_status"
+    "Timestamp":              "timestamp",
+    "Date":                   "date",
+    "Staff Name":             "staff_name",
+    "Payment Details":        "payment_details",
+    "Payment Total Amount":   "payment_total_amount",
+    "Remark":                 "remark",
+    "Centre":                 "centre",
+    "Programme":              "programme",
+    "Term":                   "term",
+    "EDB Funding":            "edb_funding",
+    "Estimated Payment Date": "estimated_payment_date",
+    "Approval Status":        "approval_status",
+    "Rejection Reason":       "rejection_reason",
+    "Quotation Link":         "quotation_link"
   },
-  "approvalStatusColumn": 12,
-  "comments": {
-    "howToSwitch": "要切換到另一個 Google Sheet，只需修改 sheetId 和 fieldMapping",
-    "sheetId": "從 Google Sheet URL 複製: https://docs.google.com/spreadsheets/d/{THIS_IS_THE_SHEET_ID}/edit",
-    "fieldMapping": "如果新 Sheet 的欄位名稱不同，更新這個對應表",
-    "note": "此配置適用於 HKIT Payment Request Form"
-  }
+  "approvalStatusColumn": 12
 }

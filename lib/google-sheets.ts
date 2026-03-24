@@ -86,15 +86,31 @@ export async function getAllApplications(): Promise<Application[]> {
   }
 }
 
-// 新增申請記錄（員工提交）
-export async function appendApplication(rowData: string[]): Promise<void> {
+// 新增申請記錄（員工提交）— 動態讀取標題，按名稱對應欄位
+export async function appendApplication(
+  fields: Record<string, string>
+): Promise<void> {
   try {
     const sheets = getGoogleSheetsClient();
+
+    // 讀取第 1 行實際標題
+    const headerRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `${SHEET_NAME}!1:1`,
+    });
+    const headers: string[] = headerRes.data.values?.[0] ?? [];
+
+    // 按標題順序建立行資料
+    const row = headers.map(header => {
+      const ourField = sheetConfig.fieldMapping[header as keyof typeof sheetConfig.fieldMapping];
+      return ourField ? (fields[ourField] ?? '') : (fields[header] ?? '');
+    });
+
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: `${SHEET_NAME}!A:N`,
+      range: `${SHEET_NAME}!A:A`,
       valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [rowData] },
+      requestBody: { values: [row] },
     });
   } catch (error) {
     console.error('Error appending application:', error);

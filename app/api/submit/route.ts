@@ -40,26 +40,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 寫入 Google Sheet（欄位順序對應 A-N）
+    // 寫入 Google Sheet（key-value，動態對應欄位）
     const timestamp = new Date().toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong' });
-    const rowData = [
-      timestamp,            // A: Timestamp
-      date,                 // B: Date
-      staff_name,           // C: Staff's Name
-      payment_details,      // D: Payment Details
-      payment_total_amount, // E: Payment Total Amount
-      remark,               // F: Remark
-      centre,               // G: Centre
-      programme,            // H: Programme
-      term,                 // I: Term
-      edb_funding,          // J: EDB Funding
-      estimated_payment_date, // K: Estimated payment date
-      'PENDING',            // L: Approval Status
-      '',                   // M: Rejection Reason (空白)
-      quotation_link,       // N: Quotation Link
-    ];
 
-    await appendApplication(rowData);
+    await appendApplication({
+      timestamp,
+      date,
+      staff_name,
+      payment_details,
+      payment_total_amount,
+      remark,
+      centre,
+      programme,
+      term,
+      edb_funding,
+      estimated_payment_date,
+      approval_status: 'PENDING',
+      rejection_reason: '',
+      quotation_link,
+    });
 
     return NextResponse.json({ success: true, message: '申請已成功提交' });
   } catch (error) {
