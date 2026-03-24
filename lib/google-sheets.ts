@@ -147,8 +147,9 @@ export async function uploadFileToDrive(
 
     return uploaded.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
   } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
     console.error('Error uploading to Drive:', error);
-    throw new Error('Failed to upload file to Google Drive');
+    throw new Error(`Drive: ${detail}`);
   }
 }
 
