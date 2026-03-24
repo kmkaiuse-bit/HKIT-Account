@@ -21,6 +21,14 @@ interface Application {
 
 type Role = 'staff' | 'accounting' | 'principal';
 
+function toEmbedUrl(url: string): string {
+  return url.replace(/\/(view|edit)(\?.*)?$/, '/preview');
+}
+
+function isImageUrl(url: string): boolean {
+  return /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(url);
+}
+
 const emptyForm = {
   staff_name: '',
   date: '',
@@ -668,6 +676,24 @@ export default function Dashboard() {
                         <p className="text-xs text-gray-400">完整付款詳情</p>
                         <p className="font-medium mt-0.5 whitespace-pre-wrap">{app.payment_details}</p>
                       </div>
+                      {app.quotation_link && (
+                        <div className="sm:col-span-2 mt-2">
+                          <p className="text-xs text-gray-400 mb-2">報價單預覽</p>
+                          {isImageUrl(app.quotation_link) ? (
+                            <img
+                              src={app.quotation_link}
+                              alt="Quotation"
+                              className="max-w-full rounded-lg border border-gray-200"
+                            />
+                          ) : (
+                            <iframe
+                              src={toEmbedUrl(app.quotation_link)}
+                              className="w-full h-96 rounded-lg border border-gray-200"
+                              title="Quotation Preview"
+                            />
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
