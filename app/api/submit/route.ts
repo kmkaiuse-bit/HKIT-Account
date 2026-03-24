@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { appendApplication, uploadFileToDrive } from '@/lib/google-sheets';
+import { appendApplication } from '@/lib/google-sheets';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     const edb_funding        = (formData.get('edb_funding') as string || '').trim();
     const estimated_payment_date = (formData.get('estimated_payment_date') as string || '').trim();
     const remark             = (formData.get('remark') as string || '').trim();
-    const quotationFile      = formData.get('quotation') as File | null;
+    const quotation_link     = (formData.get('quotation_link') as string || '').trim();
 
     // 必填欄位驗證
     if (!staff_name || !date || !centre || !programme || !term || !payment_details || !payment_total_amount) {
@@ -25,19 +25,6 @@ export async function POST(request: NextRequest) {
         { success: false, error: '請填寫所有必填欄位' },
         { status: 400 }
       );
-    }
-
-    // 上傳報價單到 Google Drive（可選）
-    let quotation_link = '';
-    if (quotationFile && quotationFile.size > 0) {
-      try {
-        const arrayBuffer = await quotationFile.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        quotation_link = await uploadFileToDrive(buffer, quotationFile.name, quotationFile.type);
-      } catch (driveError) {
-        console.error('Drive upload failed, continuing without quotation link:', driveError);
-        // 上傳失敗不中斷提交，只是沒有連結
-      }
     }
 
     // 寫入 Google Sheet（key-value，動態對應欄位）
