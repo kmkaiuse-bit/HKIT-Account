@@ -1,4 +1,4 @@
-# HKIT Dashboard — 設計方案 v1.1
+# HKIT Dashboard — 設計方案 v1.2
 
 ## 現況（已完成）
 
@@ -12,6 +12,7 @@
 | Crash bug 修復（payment_total_amount undefined） | ✅ 完成 |
 | 換用全新 Google Sheet（欄位完全自定義） | ✅ 完成 |
 | Vercel 部署 | ✅ 完成 |
+| 校長審批頁內嵌報價單預覽（iframe / img） | ✅ 完成 |
 
 ---
 
@@ -19,7 +20,7 @@
 
 | Tab | 使用者 | 功能 |
 |-----|--------|------|
-| 員工報銷 | 報銷員工 | 填寫報銷表格 + 貼入報價單連結，提交申請 |
+| 員工報銷 | 報銷員工 | 填寫報銷表格 + 上傳報價單，提交申請 |
 | 會計報表 | 會計同事 | 查看所有記錄、統計數字、下載 Excel |
 | 校長審批 | 校長 | 查看待審批申請，逐一核准或拒絕，內嵌預覽報價單 |
 
@@ -48,86 +49,51 @@
 
 ---
 
-## 待做：報價單功能（下一步）
+## ⚠️ 已知問題：報價單直接上傳（Google Drive API）
 
-### 問題
-現有檔案上傳 → Google Drive API 需額外開啟，否則靜默失敗。
+### 問題根源
 
-### 解決方案：換成 URL 文字輸入
+普通 Google 帳號的 Service Account **沒有 Drive 儲存空間配額**，無法建立/擁有任何檔案。
 
-員工把報價單上傳到自己的 Google Drive，複製分享連結，貼入表格。無需 Drive API。
+錯誤訊息：
+```
+Service Accounts do not have storage quota. Leverage shared drives,
+or use OAuth delegation instead.
+```
 
-**員工操作流程：**
-1. 上傳檔案到 Google Drive
-2. 右鍵 → 「共用」→「知道連結的人可查看」→「複製連結」
-3. 貼到表格的「報價單連結」欄位
+### 嘗試過的方案
 
-### 改動檔案
-
-| 檔案 | 改動 |
+| 方案 | 結果 |
 |------|------|
-| `app/page.tsx` | Staff tab：把檔案上傳換成 URL 文字輸入（移除 `quotationFile` / `fileInputRef` state） |
-| `app/page.tsx` | Principal tab：加內嵌預覽（展開詳情時顯示 iframe 或圖片） |
-| `app/api/submit/route.ts` | 移除 Drive 上傳邏輯，直接讀取 `quotation_link` 欄位值 |
+| Service Account 直接上傳（無指定資料夾） | ❌ 失敗：無儲存配額 |
+| 指定 Drive 資料夾 + Service Account 設為編輯者 | ❌ 失敗：配額問題與資料夾無關，Service Account 仍無法建立檔案 |
+| Shared Drive | ⚠️ 需要 Google Workspace，普通帳號不適用 |
+| OAuth delegation | ⚠️ 需要 Google Workspace 管理員權限，普通帳號不適用 |
 
-### Staff Tab 改動
+### 可行解決方案（待決定）
 
-```tsx
-<div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">
-    報價單連結 Quotation URL
-    <span className="ml-2 text-xs text-gray-400 font-normal">（可選）</span>
-  </label>
-  <input
-    type="url"
-    value={form.quotation_link}
-    onChange={e => setForm(f => ({ ...f, quotation_link: e.target.value }))}
-    placeholder="貼上 Google Drive 分享連結..."
-    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-  />
-  <p className="mt-1 text-xs text-gray-400">
-    將檔案上傳至 Google Drive → 右鍵「共用」→「複製連結」→ 貼上
-  </p>
-</div>
-```
+**方案 A：Vercel Blob（推薦）**
+- Vercel 原生儲存，與 Next.js 完全整合
+- 不依賴 Google 任何 API
+- 操作：Vercel Dashboard → Storage → Create Blob → 自動注入 `BLOB_READ_WRITE_TOKEN`
+- 改動：安裝 `@vercel/blob`，修改 `uploadFileToDrive` 改用 `put()`
+- 費用：免費 tier 500MB
 
-### submit/route.ts 改動
+**方案 B：換用學校 Google Workspace 帳號**
+- 在 Workspace 建立 Service Account + 開啟 domain-wide delegation
+- 現有 code 基本不需改動
+- 需要學校 IT 配合
 
-```ts
-// 移除 Drive 上傳，直接讀取連結
-const quotation_link = (formData.get('quotation_link') as string || '').trim();
-```
+**方案 C：維持現狀（員工手動貼連結）**
+- 員工自行上傳到 Google Drive，複製分享連結貼入表格
+- 無需任何 API 改動，但操作多幾步
 
-### Principal Tab：內嵌預覽
+### 現時 code 狀態
 
-在「查看詳情」展開後，顯示報價單預覽（Google Drive iframe 或圖片）：
-
-```tsx
-{app.quotation_link && selectedApp?.rowIndex === app.rowIndex && (
-  <div className="mt-4 pt-4 border-t border-gray-100">
-    <p className="text-xs text-gray-400 mb-2">報價單預覽</p>
-    {isImageUrl(app.quotation_link) ? (
-      <img src={app.quotation_link} alt="quotation" className="max-w-full rounded border" />
-    ) : (
-      <iframe
-        src={toEmbedUrl(app.quotation_link)}
-        className="w-full h-96 rounded border"
-        title="Quotation Preview"
-      />
-    )}
-  </div>
-)}
-```
-
-Helper functions:
-```ts
-function toEmbedUrl(url: string): string {
-  return url.replace('/view', '/preview').replace('/edit', '/preview');
-}
-function isImageUrl(url: string): boolean {
-  return /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(url);
-}
-```
+目前 `app/page.tsx` 保留**檔案上傳 UI**，`app/api/submit/route.ts` 嘗試上傳 Drive：
+- 上傳失敗時申請仍然提交成功
+- 錯誤訊息會顯示給用戶（不再靜默失敗）
+- `sheet-config.json` 的 `driveFolderId` 已填入（但因配額問題暫無效果）
 
 ---
 
@@ -141,21 +107,14 @@ function isImageUrl(url: string): boolean {
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL` → 學校 Service Account email
 - `GOOGLE_PRIVATE_KEY` → 學校 Service Account 私鑰
 
-未來如需 Drive API 上傳，在 `sheet-config.json` 加 `driveFolderId` 指定上傳資料夾。
-
-### 完整換帳號步驟
-1. 在學校 Google Cloud 建立 Service Account，下載 JSON
-2. 建立新 Google Sheet，加入標題行（A–N），分享給新 Service Account（編輯者）
-3. Vercel 更新 `GOOGLE_SERVICE_ACCOUNT_EMAIL` 和 `GOOGLE_PRIVATE_KEY`
-4. 更新 `sheet-config.json` 的 `sheetId`
-5. Push → Vercel 自動 Redeploy
+換到 Workspace 後 Drive 上傳亦可恢復正常（Service Account 有配額或可用 delegation）。
 
 ---
 
 ## v1.x 範圍限制（留待後續版本）
 
 - 無登入/身份驗證（員工靠自填姓名識別）
-- 報價單為貼連結（非直接上傳）
+- 報價單上傳受制於 Google 帳號類型（普通帳號暫無法用 Drive API）
 - 不支援編輯已提交的申請
 - 不支援批量審批
 - 無電郵通知功能
@@ -164,7 +123,7 @@ function isImageUrl(url: string): boolean {
 
 ## 驗收標準
 
-- 員工報銷：填寫表格 + 貼報價單連結 → 提交成功 → Sheet 出現新行，每欄資料正確
+- 員工報銷：填寫表格 → 提交成功 → Sheet 出現新行，每欄資料正確
 - 會計報表：統計數字正確；「下載 Excel」下載有中文標題的 `.xlsx`（含報價單連結欄）
 - 校長審批：預設只顯示待審批；核准/拒絕正確更新 Sheet；點「查看詳情」出現報價單內嵌預覽
 - 換 Sheet ID 或 Service Account 後，程式碼不需改動
