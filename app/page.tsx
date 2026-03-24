@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface Application {
   rowIndex: number;
@@ -40,7 +40,6 @@ const emptyForm = {
   edb_funding: '',
   estimated_payment_date: '',
   remark: '',
-  quotation_link: '',
 };
 
 export default function Dashboard() {
@@ -51,8 +50,10 @@ export default function Dashboard() {
 
   // ── Staff form ──────────────────────────────────────────
   const [form, setForm] = useState(emptyForm);
+  const [quotationFile, setQuotationFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Principal ───────────────────────────────────────────
   const [showAllPrincipal, setShowAllPrincipal] = useState(false);
@@ -84,13 +85,19 @@ export default function Dashboard() {
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
+      if (quotationFile) fd.append('quotation', quotationFile);
 
       const res = await fetch('/api/submit', { method: 'POST', body: fd });
       const data = await res.json();
 
       if (data.success) {
-        setSubmitResult({ ok: true, msg: '申請已成功提交！系統正在處理中，稍後可在校長審批頁查看狀態。' });
+        const msg = data.warning
+          ? `申請已成功提交，但報價單未能上傳：${data.warning}`
+          : '申請已成功提交！稍後可在校長審批頁查看狀態。';
+        setSubmitResult({ ok: true, msg });
         setForm(emptyForm);
+        setQuotationFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
         fetchApplications();
       } else {
         setSubmitResult({ ok: false, msg: '提交失敗：' + data.error });
@@ -395,22 +402,47 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* Quotation Link */}
+              {/* Quotation Upload */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  報價單連結 Quotation URL
-                  <span className="ml-2 text-xs text-gray-400 font-normal">（可選）</span>
+                  報價單 Quotation
+                  <span className="ml-2 text-xs text-gray-400 font-normal">PDF / 圖片（可選）</span>
                 </label>
-                <input
-                  type="url"
-                  value={form.quotation_link}
-                  onChange={e => setForm(f => ({ ...f, quotation_link: e.target.value }))}
-                  placeholder="貼上 Google Drive 分享連結..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="mt-1 text-xs text-gray-400">
-                  將報價單上傳至 Google Drive → 右鍵「共用」→「知道連結的人可查看」→「複製連結」→ 貼上
-                </p>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
+                    onChange={e => setQuotationFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                    id="quotation-upload"
+                  />
+                  <label htmlFor="quotation-upload" className="cursor-pointer">
+                    {quotationFile ? (
+                      <div className="text-sm text-blue-600 font-medium">
+                        {quotationFile.name}
+                        <span className="ml-2 text-gray-400 text-xs">({(quotationFile.size / 1024).toFixed(0)} KB)</span>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-500">
+                        <span className="text-blue-600 font-medium">點擊上傳</span>
+                        <span className="ml-1">或拖放檔案到此處</span>
+                      </div>
+                    )}
+                  </label>
+                </div>
+                {quotationFile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuotationFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    className="mt-1 text-xs text-red-500 hover:text-red-700"
+                  >
+                    移除檔案
+                  </button>
+                )}
               </div>
 
               {/* Submit */}
