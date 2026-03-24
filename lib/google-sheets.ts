@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
+import { Readable } from 'stream';
 import sheetConfig from '../sheet-config.json';
 
-// 從環境變數或配置文件讀取
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || sheetConfig.sheetId;
 const SHEET_NAME = sheetConfig.sheetName;
 
@@ -11,7 +11,7 @@ export interface Application {
   date: string;
   staff_name: string;
   payment_details: string;
-  payment_total_amount: number;
+  payment_total_amount: number | undefined;
   remark: string;
   centre: string;
   programme: string;
@@ -19,19 +19,28 @@ export interface Application {
   edb_funding: string;
   estimated_payment_date: string;
   approval_status: string;
+  quotation_link: string;
 }
 
-// 初始化 Google Sheets API
-function getGoogleSheetsClient() {
-  const auth = new google.auth.GoogleAuth({
+function getAuth() {
+  return new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
     },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    scopes: [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive',
+    ],
   });
+}
 
-  return google.sheets({ version: 'v4', auth });
+function getGoogleSheetsClient() {
+  return google.sheets({ version: 'v4', auth: getAuth() });
+}
+
+function getGoogleDriveClient() {
+  return google.drive({ version: 'v3', auth: getAuth() });
 }
 
 // 讀取所有申請記錄
@@ -41,48 +50,89 @@ export async function getAllApplications(): Promise<Application[]> {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: `${SHEET_NAME}!A:L`, // A 到 L 列（12 個欄位）
+      range: `${SHEET_NAME}!A:N`, // 擴展到 N 欄（含報價單連結）
     });
 
     const rows = response.data.values;
+    if (!rows || rows.length === 0) return [];
 
-    if (!rows || rows.length === 0) {
-      return [];
-    }
-
-    // 第一行是標題，從第二行開始是數據
     const headers = rows[0];
     const dataRows = rows.slice(1);
-
-    // 使用配置文件的欄位映射
     const fieldMapping = sheetConfig.fieldMapping;
 
-    const applications: Application[] = dataRows.map((row, index) => {
-      const app: any = {
-        rowIndex: index + 2, // +2 因為第一行是標題，且 Google Sheets 從 1 開始計數
-      };
+    return dataRows.map((row, index) => {
+      const app: any = { rowIndex: index + 2 };
 
       headers.forEach((header, colIndex) => {
         const mappedField = fieldMapping[header as keyof typeof fieldMapping];
         if (mappedField) {
-          let value = row[colIndex] || '';
-
-          // 特殊處理：金額轉換為數字
+          let value: any = row[colIndex] || '';
           if (mappedField === 'payment_total_amount') {
-            value = parseFloat(value.toString().replace(/[^0-9.-]+/g, '')) || 0;
+            const parsed = parseFloat(value.toString().replace(/[^0-9.-]+/g, ''));
+            value = isNaN(parsed) ? undefined : parsed;
           }
-
           app[mappedField] = value;
         }
       });
 
+      // 欄位 N (index 13) = 報價單連結
+      app.quotation_link = row[13] || '';
+
       return app as Application;
     });
-
-    return applications;
   } catch (error) {
     console.error('Error fetching applications:', error);
     throw new Error('Failed to fetch applications from Google Sheets');
+  }
+}
+
+// 新增申請記錄（員工提交）
+export async function appendApplication(rowData: string[]): Promise<void> {
+  try {
+    const sheets = getGoogleSheetsClient();
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: `${SHEET_NAME}!A:N`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [rowData] },
+    });
+  } catch (error) {
+    console.error('Error appending application:', error);
+    throw new Error('Failed to append application to Google Sheets');
+  }
+}
+
+// 上傳報價單到 Google Drive，回傳分享連結
+export async function uploadFileToDrive(
+  fileBuffer: Buffer,
+  fileName: string,
+  mimeType: string
+): Promise<string> {
+  try {
+    const drive = getGoogleDriveClient();
+
+    const fileStream = new Readable();
+    fileStream.push(fileBuffer);
+    fileStream.push(null);
+
+    const uploaded = await drive.files.create({
+      requestBody: { name: fileName, mimeType },
+      media: { mimeType, body: fileStream },
+      fields: 'id,webViewLink',
+    });
+
+    const fileId = uploaded.data.id!;
+
+    // 設定為任何人都可用連結查看
+    await drive.permissions.create({
+      fileId,
+      requestBody: { type: 'anyone', role: 'reader' },
+    });
+
+    return uploaded.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
+  } catch (error) {
+    console.error('Error uploading to Drive:', error);
+    throw new Error('Failed to upload file to Google Drive');
   }
 }
 
@@ -94,30 +144,23 @@ export async function updateApprovalStatus(
 ): Promise<void> {
   try {
     const sheets = getGoogleSheetsClient();
+    const statusColumn = sheetConfig.approvalStatusColumn;
+    const columnLetter = String.fromCharCode(64 + statusColumn);
 
-    const statusColumn = sheetConfig.approvalStatusColumn; // 第 13 列（M 列）
-    const columnLetter = String.fromCharCode(64 + statusColumn); // 轉換為字母 (A=65)
-
-    // 更新審批狀態
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
       range: `${SHEET_NAME}!${columnLetter}${rowIndex}`,
       valueInputOption: 'RAW',
-      requestBody: {
-        values: [[status]],
-      },
+      requestBody: { values: [[status]] },
     });
 
-    // 如果是拒絕，可以在備註欄位寫入原因（假設有 N 列作為備註）
     if (status === 'REJECTED' && rejectionReason) {
       const remarkColumn = String.fromCharCode(64 + statusColumn + 1);
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_ID,
         range: `${SHEET_NAME}!${remarkColumn}${rowIndex}`,
         valueInputOption: 'RAW',
-        requestBody: {
-          values: [[rejectionReason]],
-        },
+        requestBody: { values: [[rejectionReason]] },
       });
     }
 
@@ -144,10 +187,7 @@ export async function batchUpdateApprovalStatus(
 
     await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: SHEET_ID,
-      requestBody: {
-        valueInputOption: 'RAW',
-        data,
-      },
+      requestBody: { valueInputOption: 'RAW', data },
     });
 
     console.log(`Batch updated ${updates.length} rows`);
