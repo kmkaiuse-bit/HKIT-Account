@@ -131,8 +131,13 @@ export async function uploadFileToDrive(
     fileStream.push(fileBuffer);
     fileStream.push(null);
 
+    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID || sheetConfig.driveFolderId;
     const uploaded = await drive.files.create({
-      requestBody: { name: fileName, mimeType },
+      requestBody: {
+        name: fileName,
+        mimeType,
+        ...(folderId ? { parents: [folderId] } : {}),
+      },
       media: { mimeType, body: fileStream },
       fields: 'id,webViewLink',
     });

@@ -17,5 +17,6 @@
     "Rejection Reason":       "rejection_reason",
     "Quotation Link":         "quotation_link"
   },
-  "approvalStatusColumn": 12
+  "approvalStatusColumn": 12,
+  "driveFolderId": ""
 }
