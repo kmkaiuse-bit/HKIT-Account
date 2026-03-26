@@ -297,9 +297,10 @@ export default function Dashboard() {
 
   function onPinSuccess() {
     if (!pendingRole) return;
-    const next = new Set(unlockedRoles).add(pendingRole);
+    const next = new Set<Role>(Array.from(unlockedRoles));
+    next.add(pendingRole);
     setUnlockedRoles(next);
-    try { sessionStorage.setItem('hkit_unlocked', JSON.stringify([...next])); } catch {}
+    try { sessionStorage.setItem('hkit_unlocked', JSON.stringify(Array.from(next))); } catch {}
     setRole(pendingRole);
     setPendingRole(null);
   }
