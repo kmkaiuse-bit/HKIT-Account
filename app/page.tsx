@@ -244,7 +244,7 @@ export default function Dashboard() {
   const [editingAmountValue, setEditingAmountValue] = useState('');
 
   // PIN access
-  const [unlockedRoles, setUnlockedRoles] = useState<Set<Role>>(new Set(['staff']));
+  const [unlockedRoles, setUnlockedRoles] = useState<Set<Role>>(new Set<Role>(['staff']));
   const [pendingRole, setPendingRole] = useState<Role | null>(null);
 
   const L = LABELS[lang];
