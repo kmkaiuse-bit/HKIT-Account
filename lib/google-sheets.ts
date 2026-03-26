@@ -7,11 +7,15 @@ const SHEET_NAME = sheetConfig.sheetName;
 
 export interface Application {
   rowIndex: number;
+  record_no: string;
   timestamp: string;
   date: string;
   staff_name: string;
   payment_details: string;
   payment_total_amount: number | undefined;
+  supplier_name: string;
+  bank_name: string;
+  bank_account_number: string;
   remark: string;
   centre: string;
   programme: string;
@@ -19,6 +23,7 @@ export interface Application {
   edb_funding: string;
   estimated_payment_date: string;
   approval_status: string;
+  rejection_reason: string;
   quotation_link: string;
 }
 
@@ -50,7 +55,7 @@ export async function getAllApplications(): Promise<Application[]> {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: `${SHEET_NAME}!A:N`, // 擴展到 N 欄（含報價單連結）
+      range: `${SHEET_NAME}!A:S`,
     });
 
     const rows = response.data.values;
@@ -75,9 +80,6 @@ export async function getAllApplications(): Promise<Application[]> {
         }
       });
 
-      // 欄位 N (index 13) = 報價單連結
-      app.quotation_link = row[13] || '';
-
       return app as Application;
     });
   } catch (error) {
@@ -86,24 +88,34 @@ export async function getAllApplications(): Promise<Application[]> {
   }
 }
 
-// 新增申請記錄（員工提交）— 動態讀取標題，按名稱對應欄位
+// 新增申請記錄（員工提交）
 export async function appendApplication(
   fields: Record<string, string>
 ): Promise<void> {
   try {
     const sheets = getGoogleSheetsClient();
 
-    // 讀取第 1 行實際標題
+    // 讀取第 1 行標題
     const headerRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: `${SHEET_NAME}!1:1`,
     });
     const headers: string[] = headerRes.data.values?.[0] ?? [];
 
+    // 取得現有資料行數以生成記錄編號
+    const dataRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `${SHEET_NAME}!A:A`,
+    });
+    const existingRowCount = Math.max(0, (dataRes.data.values?.length ?? 1) - 1); // exclude header
+    const recordNo = 'HKIT' + (existingRowCount + 1000).toString().padStart(6, '0');
+
+    const fieldsWithRecord = { ...fields, record_no: recordNo };
+
     // 按標題順序建立行資料
     const row = headers.map(header => {
       const ourField = sheetConfig.fieldMapping[header as keyof typeof sheetConfig.fieldMapping];
-      return ourField ? (fields[ourField] ?? '') : (fields[header] ?? '');
+      return ourField ? (fieldsWithRecord[ourField] ?? '') : (fieldsWithRecord[header] ?? '');
     });
 
     await sheets.spreadsheets.values.append({
@@ -144,7 +156,6 @@ export async function uploadFileToDrive(
 
     const fileId = uploaded.data.id!;
 
-    // 設定為任何人都可用連結查看
     await drive.permissions.create({
       fileId,
       requestBody: { type: 'anyone', role: 'reader' },
@@ -216,5 +227,37 @@ export async function batchUpdateApprovalStatus(
   } catch (error) {
     console.error('Error batch updating:', error);
     throw new Error('Failed to batch update approval status');
+  }
+}
+
+// 更新金額
+export async function updateAmount(
+  rowIndex: number,
+  newAmount: number
+): Promise<void> {
+  try {
+    const sheets = getGoogleSheetsClient();
+
+    // Amount is "Payment Total Amount" column — find it dynamically from headers
+    const headerRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `${SHEET_NAME}!1:1`,
+    });
+    const headers: string[] = headerRes.data.values?.[0] ?? [];
+    const colIndex = headers.indexOf('Payment Total Amount');
+    if (colIndex === -1) throw new Error('Payment Total Amount column not found');
+
+    const columnLetter = String.fromCharCode(65 + colIndex);
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${SHEET_NAME}!${columnLetter}${rowIndex}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[newAmount]] },
+    });
+
+    console.log(`Updated amount for row ${rowIndex} to ${newAmount}`);
+  } catch (error) {
+    console.error('Error updating amount:', error);
+    throw new Error('Failed to update amount');
   }
 }

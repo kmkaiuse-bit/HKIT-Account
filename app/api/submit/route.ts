@@ -7,27 +7,28 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
 
-    const staff_name         = (formData.get('staff_name') as string || '').trim();
-    const date               = (formData.get('date') as string || '').trim();
-    const centre             = (formData.get('centre') as string || '').trim();
-    const programme          = (formData.get('programme') as string || '').trim();
-    const term               = (formData.get('term') as string || '').trim();
-    const payment_details    = (formData.get('payment_details') as string || '').trim();
-    const payment_total_amount = (formData.get('payment_total_amount') as string || '').trim();
-    const edb_funding        = (formData.get('edb_funding') as string || '').trim();
+    const staff_name             = (formData.get('staff_name') as string || '').trim();
+    const date                   = (formData.get('date') as string || '').trim();
+    const centre                 = (formData.get('centre') as string || '').trim();
+    const programme              = (formData.get('programme') as string || '').trim();
+    const term                   = (formData.get('term') as string || '').trim();
+    const payment_details        = (formData.get('payment_details') as string || '').trim();
+    const payment_total_amount   = (formData.get('payment_total_amount') as string || '').trim();
+    const supplier_name          = (formData.get('supplier_name') as string || '').trim();
+    const bank_name              = (formData.get('bank_name') as string || '').trim();
+    const bank_account_number    = (formData.get('bank_account_number') as string || '').trim();
+    const edb_funding            = (formData.get('edb_funding') as string || '').trim();
     const estimated_payment_date = (formData.get('estimated_payment_date') as string || '').trim();
-    const remark             = (formData.get('remark') as string || '').trim();
-    const quotationFile      = formData.get('quotation') as File | null;
+    const remark                 = (formData.get('remark') as string || '').trim();
+    const quotationFile          = formData.get('quotation') as File | null;
 
-    // 必填欄位驗證
-    if (!staff_name || !date || !centre || !programme || !term || !payment_details || !payment_total_amount) {
+    if (!staff_name || !date || !centre || !programme || !term || !payment_details || !payment_total_amount || !supplier_name) {
       return NextResponse.json(
-        { success: false, error: '請填寫所有必填欄位' },
+        { success: false, error: '請填寫所有必填欄位 (Please fill in all required fields)' },
         { status: 400 }
       );
     }
 
-    // 上傳報價單到 Google Drive（可選）
     let quotation_link = '';
     let driveWarning = '';
     if (quotationFile && quotationFile.size > 0) {
@@ -41,7 +42,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 寫入 Google Sheet（key-value，動態對應欄位）
     const timestamp = new Date().toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong' });
 
     await appendApplication({
@@ -50,6 +50,9 @@ export async function POST(request: NextRequest) {
       staff_name,
       payment_details,
       payment_total_amount,
+      supplier_name,
+      bank_name,
+      bank_account_number,
       remark,
       centre,
       programme,

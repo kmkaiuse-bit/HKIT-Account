@@ -1,14 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { LABELS, CENTRE_OPTIONS, PROGRAMME_OPTIONS, EDB_OPTIONS, type Lang } from '@/lib/constants';
 
 interface Application {
   rowIndex: number;
+  record_no: string;
   timestamp: string;
   date: string;
   staff_name: string;
   payment_details: string;
   payment_total_amount: number | undefined;
+  supplier_name: string;
+  bank_name: string;
+  bank_account_number: string;
   remark: string;
   centre: string;
   programme: string;
@@ -37,32 +42,237 @@ const emptyForm = {
   term: '',
   payment_details: '',
   payment_total_amount: '',
+  supplier_name: '',
+  bank_name: '',
+  bank_account_number: '',
   edb_funding: '',
   estimated_payment_date: '',
   remark: '',
 };
 
+// ── Multi-Select component ────────────────────────────────────────────────────
+function MultiSelect({
+  options,
+  value,
+  onChange,
+  placeholder,
+}: {
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = value ? value.split(',').filter(Boolean) : [];
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  function toggle(opt: string) {
+    const next = selected.includes(opt)
+      ? selected.filter(s => s !== opt)
+      : [...selected, opt];
+    onChange(next.join(','));
+  }
+
+  function remove(opt: string) {
+    onChange(selected.filter(s => s !== opt).join(','));
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      {/* Chips */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-1">
+          {selected.map(s => (
+            <span
+              key={s}
+              className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium"
+            >
+              {s}
+              <button
+                type="button"
+                onClick={() => remove(s)}
+                className="hover:text-blue-900 leading-none"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {/* Input trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-left text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+      >
+        {selected.length === 0 ? (placeholder || 'Select...') : `${selected.length} selected`}
+        <span className="float-right text-gray-400">▾</span>
+      </button>
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+          {options.map(opt => (
+            <label
+              key={opt}
+              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(opt)}
+                onChange={() => toggle(opt)}
+                className="accent-blue-600"
+              />
+              {opt}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── PIN Modal ────────────────────────────────────────────────────────────────
+function PinModal({
+  role,
+  L,
+  onSuccess,
+  onCancel,
+}: {
+  role: Role;
+  L: typeof LABELS.zh;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  async function submit() {
+    setChecking(true);
+    setError(false);
+    try {
+      const res = await fetch('/api/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, pin }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        onSuccess();
+      } else {
+        setError(true);
+        setPin('');
+      }
+    } catch {
+      setError(true);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">{L.pinTitle}</h3>
+        <input
+          type="password"
+          inputMode="numeric"
+          maxLength={8}
+          value={pin}
+          onChange={e => setPin(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && submit()}
+          placeholder={L.pinPlaceholder}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+          autoFocus
+        />
+        {error && <p className="text-xs text-red-500 mb-2">{L.pinError}</p>}
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
+          >
+            {L.cancel}
+          </button>
+          <button
+            onClick={submit}
+            disabled={checking || !pin}
+            className="flex-1 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            {checking ? '...' : L.pinSubmit}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  // ── Shared ──────────────────────────────────────────────
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<Role>('staff');
+  const [lang, setLang] = useState<Lang>('zh');
 
-  // ── Staff form ──────────────────────────────────────────
+  // Staff form
   const [form, setForm] = useState(emptyForm);
   const [quotationFile, setQuotationFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Principal ───────────────────────────────────────────
+  // AI scan
+  const [scanning, setScanning] = useState(false);
+  const [aiNotice, setAiNotice] = useState(false);
+
+  // Principal
   const [showAllPrincipal, setShowAllPrincipal] = useState(false);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Amount edit
+  const [editingAmountRow, setEditingAmountRow] = useState<number | null>(null);
+  const [editingAmountValue, setEditingAmountValue] = useState('');
+
+  // PIN access
+  const [unlockedRoles, setUnlockedRoles] = useState<Set<Role>>(new Set(['staff']));
+  const [pendingRole, setPendingRole] = useState<Role | null>(null);
+
+  const L = LABELS[lang];
+
+  // Load lang from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('hkit_lang') as Lang | null;
+    if (saved === 'en' || saved === 'zh') setLang(saved);
+  }, []);
+
+  // Load unlocked roles from sessionStorage
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('hkit_unlocked');
+      if (saved) {
+        const arr = JSON.parse(saved) as Role[];
+        setUnlockedRoles(new Set(arr));
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => { fetchApplications(); }, []);
+
+  function toggleLang() {
+    const next: Lang = lang === 'zh' ? 'en' : 'zh';
+    setLang(next);
+    localStorage.setItem('hkit_lang', next);
+  }
 
   async function fetchApplications() {
     setLoading(true);
@@ -77,7 +287,52 @@ export default function Dashboard() {
     }
   }
 
-  // ── Staff: submit form ───────────────────────────────────
+  function handleTabClick(key: Role) {
+    if (unlockedRoles.has(key)) {
+      setRole(key);
+    } else {
+      setPendingRole(key);
+    }
+  }
+
+  function onPinSuccess() {
+    if (!pendingRole) return;
+    const next = new Set(unlockedRoles).add(pendingRole);
+    setUnlockedRoles(next);
+    try { sessionStorage.setItem('hkit_unlocked', JSON.stringify([...next])); } catch {}
+    setRole(pendingRole);
+    setPendingRole(null);
+  }
+
+  // ── AI scan ────────────────────────────────────────────────────────────────
+  async function handleFileChange(file: File | null) {
+    setQuotationFile(file);
+    setAiNotice(false);
+    if (!file) return;
+
+    setScanning(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/scan-quotation', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.success) {
+        setForm(f => ({
+          ...f,
+          supplier_name:        data.supplier_name || f.supplier_name,
+          payment_total_amount: data.amount ? String(data.amount) : f.payment_total_amount,
+          payment_details:      data.description || f.payment_details,
+        }));
+        setAiNotice(true);
+      }
+    } catch (e) {
+      console.error('AI scan error:', e);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  // ── Submit form ───────────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -92,26 +347,27 @@ export default function Dashboard() {
 
       if (data.success) {
         const msg = data.warning
-          ? `申請已成功提交，但報價單未能上傳：${data.warning}`
-          : '申請已成功提交！稍後可在校長審批頁查看狀態。';
+          ? `${L.successWarn}${data.warning}`
+          : L.successMsg;
         setSubmitResult({ ok: true, msg });
         setForm(emptyForm);
         setQuotationFile(null);
+        setAiNotice(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
         fetchApplications();
       } else {
-        setSubmitResult({ ok: false, msg: '提交失敗：' + data.error });
+        setSubmitResult({ ok: false, msg: L.errorSubmit + data.error });
       }
     } catch {
-      setSubmitResult({ ok: false, msg: '提交失敗，請檢查網絡連線後重試。' });
+      setSubmitResult({ ok: false, msg: L.errorNetwork });
     } finally {
       setSubmitting(false);
     }
   }
 
-  // ── Principal: approve ───────────────────────────────────
+  // ── Approve ───────────────────────────────────────────────────────────────
   async function handleApprove(app: Application) {
-    if (!confirm(`確認核准 ${app.staff_name} 的付款申請？`)) return;
+    if (!confirm(`${L.confirmApprove} — ${app.staff_name}?`)) return;
     setActionLoading(true);
     try {
       const res = await fetch('/api/update-status', {
@@ -121,23 +377,23 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (data.success) {
-        alert('已核准！');
+        alert(L.approveAlert);
         fetchApplications();
       } else {
-        alert('操作失敗：' + data.error);
+        alert(L.errorOp + data.error);
       }
     } catch {
-      alert('操作失敗');
+      alert(L.errorOpGeneric);
     } finally {
       setActionLoading(false);
     }
   }
 
-  // ── Principal: reject ────────────────────────────────────
+  // ── Reject ────────────────────────────────────────────────────────────────
   async function handleReject() {
     if (!selectedApp) return;
     if (rejectionReason.length < 20) {
-      alert('拒絕原因至少需要 20 個字元');
+      alert(L.rejectMinAlert);
       return;
     }
     setActionLoading(true);
@@ -154,16 +410,38 @@ export default function Dashboard() {
         setSelectedApp(null);
         fetchApplications();
       } else {
-        alert('操作失敗：' + data.error);
+        alert(L.errorOp + data.error);
       }
     } catch {
-      alert('操作失敗');
+      alert(L.errorOpGeneric);
     } finally {
       setActionLoading(false);
     }
   }
 
-  // ── Helpers ──────────────────────────────────────────────
+  // ── Amount edit ───────────────────────────────────────────────────────────
+  async function saveAmount(app: Application) {
+    const newAmount = parseFloat(editingAmountValue);
+    if (isNaN(newAmount) || newAmount < 0) return;
+    try {
+      const res = await fetch('/api/update-amount', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rowIndex: app.rowIndex, newAmount }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingAmountRow(null);
+        fetchApplications();
+      } else {
+        alert(L.errorOp + data.error);
+      }
+    } catch {
+      alert(L.errorOpGeneric);
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
   function getStatusColor(status: string) {
     switch ((status || '').toUpperCase()) {
       case 'APPROVED': return 'text-green-700 bg-green-100';
@@ -175,31 +453,28 @@ export default function Dashboard() {
 
   function getStatusText(status: string) {
     switch ((status || '').toUpperCase()) {
-      case 'APPROVED': return '已核准';
-      case 'REJECTED': return '已拒絕';
-      case 'PENDING':  return '待審批';
-      default:         return status || '未知';
+      case 'APPROVED': return L.statusApproved;
+      case 'REJECTED': return L.statusRejected;
+      case 'PENDING':  return L.statusPending;
+      default:         return status || '—';
     }
   }
 
-  // ── Accounting stats ─────────────────────────────────────
   const totalAmount   = applications.reduce((s, a) => s + (a.payment_total_amount ?? 0), 0);
   const pendingCount  = applications.filter(a => (a.approval_status || '').toUpperCase() === 'PENDING').length;
   const approvedCount = applications.filter(a => (a.approval_status || '').toUpperCase() === 'APPROVED').length;
   const rejectedCount = applications.filter(a => (a.approval_status || '').toUpperCase() === 'REJECTED').length;
 
-  // ── Principal list ───────────────────────────────────────
   const principalList = showAllPrincipal
     ? applications
     : applications.filter(a => (a.approval_status || '').toUpperCase() === 'PENDING');
 
-  // ── Loading screen ───────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
-          <p className="mt-4 text-gray-600">載入中...</p>
+          <p className="mt-4 text-gray-600">{L.loading}</p>
         </div>
       </div>
     );
@@ -211,21 +486,30 @@ export default function Dashboard() {
       {/* ── Header ── */}
       <div className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-4">
-            <h1 className="text-2xl font-bold text-gray-900">HKIT 付款申請系統</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Payment Request Management System</p>
+          <div className="py-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{L.systemTitle}</h1>
+              <p className="text-sm text-gray-500 mt-0.5">{L.systemSubtitle}</p>
+            </div>
+            {/* Language toggle */}
+            <button
+              onClick={toggleLang}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-600"
+            >
+              {lang === 'zh' ? 'EN' : '中文'}
+            </button>
           </div>
 
           {/* Tab bar */}
           <div className="flex border-b border-gray-200 -mb-px">
             {([
-              ['staff',      '員工報銷'],
-              ['accounting', '會計報表'],
-              ['principal',  '校長審批'],
+              ['staff',      L.tabStaff],
+              ['accounting', L.tabAccounting],
+              ['principal',  L.tabPrincipal],
             ] as [Role, string][]).map(([key, label]) => (
               <button
                 key={key}
-                onClick={() => setRole(key)}
+                onClick={() => handleTabClick(key)}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                   role === key
                     ? 'border-blue-600 text-blue-600'
@@ -238,22 +522,34 @@ export default function Dashboard() {
                     {pendingCount}
                   </span>
                 )}
+                {!unlockedRoles.has(key) && (
+                  <span className="ml-1 text-gray-400 text-xs">🔒</span>
+                )}
               </button>
             ))}
           </div>
         </div>
       </div>
 
+      {/* PIN Modal */}
+      {pendingRole && (
+        <PinModal
+          role={pendingRole}
+          L={L}
+          onSuccess={onPinSuccess}
+          onCancel={() => setPendingRole(null)}
+        />
+      )}
+
       {/* ══════════════════════════════════════════════════════
-          STAFF TAB — 員工報銷
+          STAFF TAB
       ══════════════════════════════════════════════════════ */}
       {role === 'staff' && (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-white rounded-xl shadow p-6 sm:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-1">提交付款申請</h2>
-            <p className="text-sm text-gray-500 mb-6">請填寫以下資料，並上傳相關報價單。</p>
+            <h2 className="text-xl font-bold text-gray-900 mb-1">{L.formTitle}</h2>
+            <p className="text-sm text-gray-500 mb-6">{L.formSubtitle}</p>
 
-            {/* Success / Error banner */}
             {submitResult && (
               <div className={`mb-6 p-4 rounded-lg text-sm ${submitResult.ok ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
                 {submitResult.msg}
@@ -261,28 +557,26 @@ export default function Dashboard() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Row 1: Name + Date */}
+              {/* Name + Date */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    員工姓名 <span className="text-red-500">*</span>
+                    {L.staffName} <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="text"
-                    required
+                    type="text" required
                     value={form.staff_name}
                     onChange={e => setForm(f => ({ ...f, staff_name: e.target.value }))}
-                    placeholder="Full Name"
+                    placeholder={L.phFullName}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    日期 <span className="text-red-500">*</span>
+                    {L.date} <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="date"
-                    required
+                    type="date" required
                     value={form.date}
                     onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -290,60 +584,52 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Row 2: Centre + Programme */}
+              {/* Centre + Programme */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    中心 Centre <span className="text-red-500">*</span>
+                    {L.centre} <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    required
+                  <MultiSelect
+                    options={CENTRE_OPTIONS}
                     value={form.centre}
-                    onChange={e => setForm(f => ({ ...f, centre: e.target.value }))}
-                    placeholder="例：觀塘中心"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={v => setForm(f => ({ ...f, centre: v }))}
+                    placeholder={L.phCentre}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    計劃 Programme <span className="text-red-500">*</span>
+                    {L.programme} <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    required
+                  <MultiSelect
+                    options={PROGRAMME_OPTIONS}
                     value={form.programme}
-                    onChange={e => setForm(f => ({ ...f, programme: e.target.value }))}
-                    placeholder="例：STEM 課程"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={v => setForm(f => ({ ...f, programme: v }))}
+                    placeholder={L.phProgramme}
                   />
                 </div>
               </div>
 
-              {/* Row 3: Term + Amount */}
+              {/* Term + Amount */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    學期 Term <span className="text-red-500">*</span>
+                    {L.term} <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="text"
-                    required
+                    type="text" required
                     value={form.term}
                     onChange={e => setForm(f => ({ ...f, term: e.target.value }))}
-                    placeholder="例：2024-25 Term 1"
+                    placeholder={L.phTerm}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    申請金額 (HKD) <span className="text-red-500">*</span>
+                    {L.amount} <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
-                    required
-                    min="0"
-                    step="0.01"
+                    type="number" required min="0" step="0.01"
                     value={form.payment_total_amount}
                     onChange={e => setForm(f => ({ ...f, payment_total_amount: e.target.value }))}
                     placeholder="0.00"
@@ -355,32 +641,68 @@ export default function Dashboard() {
               {/* Payment Details */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  付款詳情 Payment Details <span className="text-red-500">*</span>
+                  {L.paymentDetails} <span className="text-red-500">*</span>
                 </label>
                 <textarea
-                  required
-                  rows={3}
+                  required rows={3}
                   value={form.payment_details}
                   onChange={e => setForm(f => ({ ...f, payment_details: e.target.value }))}
-                  placeholder="請詳細描述付款用途..."
+                  placeholder={L.phPaymentDetails}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
 
-              {/* Row 4: EDB Funding + Estimated Date */}
+              {/* Supplier Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {L.supplierName} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text" required
+                  value={form.supplier_name}
+                  onChange={e => setForm(f => ({ ...f, supplier_name: e.target.value }))}
+                  placeholder={L.phSupplierName}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Bank Name + Bank Account */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">EDB 資助</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{L.bankName}</label>
                   <input
                     type="text"
-                    value={form.edb_funding}
-                    onChange={e => setForm(f => ({ ...f, edb_funding: e.target.value }))}
-                    placeholder="如適用"
+                    value={form.bank_name}
+                    onChange={e => setForm(f => ({ ...f, bank_name: e.target.value }))}
+                    placeholder={L.phBankName}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">預計付款日期</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{L.bankAccount}</label>
+                  <input
+                    type="text"
+                    value={form.bank_account_number}
+                    onChange={e => setForm(f => ({ ...f, bank_account_number: e.target.value }))}
+                    placeholder={L.phBankAccount}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* EDB + Expected Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{L.edbFunding}</label>
+                  <MultiSelect
+                    options={EDB_OPTIONS}
+                    value={form.edb_funding}
+                    onChange={v => setForm(f => ({ ...f, edb_funding: v }))}
+                    placeholder={L.phEdb}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{L.expectedPayDate}</label>
                   <input
                     type="date"
                     value={form.estimated_payment_date}
@@ -392,12 +714,12 @@ export default function Dashboard() {
 
               {/* Remark */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">備註 Remark</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{L.remark}</label>
                 <textarea
                   rows={2}
                   value={form.remark}
                   onChange={e => setForm(f => ({ ...f, remark: e.target.value }))}
-                  placeholder="其他補充說明（可選）"
+                  placeholder={L.phRemark}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
@@ -405,53 +727,58 @@ export default function Dashboard() {
               {/* Quotation Upload */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  報價單 Quotation
-                  <span className="ml-2 text-xs text-gray-400 font-normal">PDF / 圖片（可選）</span>
+                  {L.quotation}
+                  <span className="ml-2 text-xs text-gray-400 font-normal">{L.quotationHint}</span>
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
-                    onChange={e => setQuotationFile(e.target.files?.[0] || null)}
+                    onChange={e => handleFileChange(e.target.files?.[0] || null)}
                     className="hidden"
                     id="quotation-upload"
                   />
                   <label htmlFor="quotation-upload" className="cursor-pointer">
-                    {quotationFile ? (
+                    {scanning ? (
+                      <div className="text-sm text-blue-600">{L.aiScanning}</div>
+                    ) : quotationFile ? (
                       <div className="text-sm text-blue-600 font-medium">
                         {quotationFile.name}
                         <span className="ml-2 text-gray-400 text-xs">({(quotationFile.size / 1024).toFixed(0)} KB)</span>
                       </div>
                     ) : (
                       <div className="text-sm text-gray-500">
-                        <span className="text-blue-600 font-medium">點擊上傳</span>
-                        <span className="ml-1">或拖放檔案到此處</span>
+                        <span className="text-blue-600 font-medium">{L.clickUpload}</span>
+                        <span className="ml-1">{L.orDrop}</span>
                       </div>
                     )}
                   </label>
                 </div>
-                {quotationFile && (
+                {aiNotice && (
+                  <p className="mt-1 text-xs text-blue-600">{L.aiFilled}</p>
+                )}
+                {quotationFile && !scanning && (
                   <button
                     type="button"
                     onClick={() => {
                       setQuotationFile(null);
+                      setAiNotice(false);
                       if (fileInputRef.current) fileInputRef.current.value = '';
                     }}
                     className="mt-1 text-xs text-red-500 hover:text-red-700"
                   >
-                    移除檔案
+                    {L.removeFile}
                   </button>
                 )}
               </div>
 
-              {/* Submit */}
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || scanning}
                 className="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {submitting ? '提交中...' : '提交申請'}
+                {submitting ? L.submitting : L.submitBtn}
               </button>
             </form>
           </div>
@@ -459,7 +786,7 @@ export default function Dashboard() {
       )}
 
       {/* ══════════════════════════════════════════════════════
-          ACCOUNTING TAB — 會計報表
+          ACCOUNTING TAB
       ══════════════════════════════════════════════════════ */}
       {role === 'accounting' && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -467,10 +794,10 @@ export default function Dashboard() {
           {/* Stats cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: '申請總數', value: applications.length, color: 'text-gray-900' },
-              { label: '申請總額', value: `$${totalAmount.toLocaleString()}`, color: 'text-blue-600' },
-              { label: '待審批', value: pendingCount, color: 'text-yellow-600' },
-              { label: '已核准', value: approvedCount, color: 'text-green-600' },
+              { label: L.totalApps,   value: applications.length,                  color: 'text-gray-900' },
+              { label: L.totalAmount, value: `$${totalAmount.toLocaleString()}`,    color: 'text-blue-600' },
+              { label: L.pending,     value: pendingCount,                          color: 'text-yellow-600' },
+              { label: L.approved,    value: approvedCount,                         color: 'text-green-600' },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-white rounded-xl shadow p-4 text-center">
                 <p className="text-xs text-gray-500 uppercase tracking-wide">{label}</p>
@@ -482,21 +809,21 @@ export default function Dashboard() {
           {/* Actions bar */}
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">
-              共 {applications.length} 筆記錄（{rejectedCount} 已拒絕）
+              {applications.length} {L.recordsInfo}（{rejectedCount} {L.rejected}）
             </p>
             <div className="flex gap-3">
               <button
                 onClick={fetchApplications}
                 className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                重新整理
+                {L.refresh}
               </button>
               <a
                 href="/api/export"
                 download="payment-requests.xlsx"
                 className="px-4 py-2 text-sm bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
               >
-                下載 Excel
+                {L.downloadExcel}
               </a>
             </div>
           </div>
@@ -507,7 +834,12 @@ export default function Dashboard() {
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    {['提交時間','日期','員工姓名','付款詳情','金額','中心','計劃','學期','EDB資助','預計付款日期','審批狀態','報價單'].map(h => (
+                    {[
+                      L.colRecordNo, L.colSubmitTime, L.colDate, L.colStaff,
+                      L.colPaymentDetails, L.colAmount, L.colSupplier, L.colBank,
+                      L.colBankAccount, L.colCentre, L.colProgramme, L.colTerm,
+                      L.colEdb, L.colExpectedDate, L.colStatus, L.colQuotation,
+                    ].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -517,19 +849,54 @@ export default function Dashboard() {
                 <tbody className="divide-y divide-gray-100">
                   {applications.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="px-4 py-8 text-center text-gray-400">暫無記錄</td>
+                      <td colSpan={16} className="px-4 py-8 text-center text-gray-400">{L.noRecords}</td>
                     </tr>
                   ) : applications.map(app => (
                     <tr key={app.rowIndex} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-xs font-mono text-gray-600">{app.record_no}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-gray-500 text-xs">{app.timestamp}</td>
                       <td className="px-4 py-3 whitespace-nowrap">{app.date}</td>
                       <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{app.staff_name}</td>
                       <td className="px-4 py-3 max-w-xs">
                         <span className="block truncate" title={app.payment_details}>{app.payment_details}</span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-right font-medium">
-                        ${(app.payment_total_amount ?? 0).toLocaleString()}
+                      {/* Amount with inline edit */}
+                      <td className="px-4 py-3 whitespace-nowrap text-right font-medium group">
+                        {editingAmountRow === app.rowIndex ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              value={editingAmountValue}
+                              onChange={e => setEditingAmountValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') saveAmount(app);
+                                if (e.key === 'Escape') setEditingAmountRow(null);
+                              }}
+                              className="w-24 border border-blue-400 rounded px-2 py-0.5 text-sm focus:outline-none"
+                              autoFocus
+                            />
+                            <button onClick={() => saveAmount(app)} className="text-green-600 hover:text-green-700 text-xs">✓</button>
+                            <button onClick={() => setEditingAmountRow(null)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                          </div>
+                        ) : (
+                          <span className="flex items-center justify-end gap-1">
+                            ${(app.payment_total_amount ?? 0).toLocaleString()}
+                            <button
+                              onClick={() => {
+                                setEditingAmountRow(app.rowIndex);
+                                setEditingAmountValue(String(app.payment_total_amount ?? 0));
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 transition-opacity text-xs ml-1"
+                              title="Edit amount"
+                            >
+                              ✎
+                            </button>
+                          </span>
+                        )}
                       </td>
+                      <td className="px-4 py-3 whitespace-nowrap">{app.supplier_name}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{app.bank_name}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{app.bank_account_number}</td>
                       <td className="px-4 py-3 whitespace-nowrap">{app.centre}</td>
                       <td className="px-4 py-3 whitespace-nowrap">{app.programme}</td>
                       <td className="px-4 py-3 whitespace-nowrap">{app.term}</td>
@@ -544,7 +911,7 @@ export default function Dashboard() {
                         {app.quotation_link ? (
                           <a href={app.quotation_link} target="_blank" rel="noopener noreferrer"
                             className="text-blue-600 hover:underline text-xs">
-                            查看
+                            {L.view}
                           </a>
                         ) : (
                           <span className="text-gray-300 text-xs">—</span>
@@ -560,48 +927,51 @@ export default function Dashboard() {
       )}
 
       {/* ══════════════════════════════════════════════════════
-          PRINCIPAL TAB — 校長審批
+          PRINCIPAL TAB
       ══════════════════════════════════════════════════════ */}
       {role === 'principal' && (
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
 
-          {/* Toolbar */}
           <div className="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-3">
             <p className="text-sm text-gray-600">
               {showAllPrincipal
-                ? `顯示全部 ${applications.length} 筆申請`
-                : `${pendingCount} 筆待審批`}
+                ? `${L.showingAll} ${applications.length} ${L.apps}`
+                : `${pendingCount} ${L.pendingCount}`}
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowAllPrincipal(v => !v)}
                 className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                {showAllPrincipal ? '只看待審批' : '查看全部'}
+                {showAllPrincipal ? L.showPending : L.viewAll}
               </button>
               <button
                 onClick={fetchApplications}
                 className="px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg"
               >
-                重新整理
+                {L.refresh}
               </button>
             </div>
           </div>
 
-          {/* Application cards */}
           <div className="space-y-4">
             {principalList.length === 0 ? (
               <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400">
-                {showAllPrincipal ? '暫無申請記錄' : '目前沒有待審批的申請'}
+                {showAllPrincipal ? L.noApplications : L.noPending}
               </div>
             ) : principalList.map(app => (
               <div key={app.rowIndex} className="bg-white rounded-xl shadow overflow-hidden hover:shadow-md transition-shadow">
                 <div className="p-6">
                   <div className="flex justify-between items-start gap-4">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate" title={app.payment_details}>
-                        {app.payment_details}
-                      </h3>
+                      <div className="flex items-center gap-2 mb-1">
+                        {app.record_no && (
+                          <span className="text-xs font-mono text-gray-400">{app.record_no}</span>
+                        )}
+                        <h3 className="font-semibold text-gray-900 truncate" title={app.payment_details}>
+                          {app.payment_details}
+                        </h3>
+                      </div>
                       <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-sm text-gray-600">
                         <span>👤 {app.staff_name}</span>
                         <span>🏫 {app.centre}</span>
@@ -609,10 +979,11 @@ export default function Dashboard() {
                         <span>📅 {app.date}</span>
                         <span>📆 {app.term}</span>
                         {app.edb_funding && <span>💰 {app.edb_funding}</span>}
+                        {app.supplier_name && <span>🏢 {app.supplier_name}</span>}
                       </div>
                       {app.remark && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
-                          <span className="font-medium text-gray-700">備註：</span>{app.remark}
+                          <span className="font-medium text-gray-700">{L.noteLabel}</span>{app.remark}
                         </div>
                       )}
                     </div>
@@ -626,7 +997,6 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Action buttons */}
                   <div className="mt-4 flex flex-wrap gap-2">
                     {(app.approval_status || '').toUpperCase() === 'PENDING' && (
                       <>
@@ -635,14 +1005,14 @@ export default function Dashboard() {
                           disabled={actionLoading}
                           className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
                         >
-                          ✓ 核准
+                          ✓ {L.approve}
                         </button>
                         <button
                           onClick={() => { setSelectedApp(app); setShowRejectModal(true); }}
                           disabled={actionLoading}
                           className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50"
                         >
-                          ✗ 拒絕
+                          ✗ {L.reject}
                         </button>
                       </>
                     )}
@@ -653,35 +1023,46 @@ export default function Dashboard() {
                         rel="noopener noreferrer"
                         className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
                       >
-                        查看報價單
+                        {L.viewQuotation}
                       </a>
                     )}
                     <button
                       onClick={() => setSelectedApp(selectedApp?.rowIndex === app.rowIndex ? null : app)}
                       className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
                     >
-                      {selectedApp?.rowIndex === app.rowIndex ? '收起詳情' : '查看詳情'}
+                      {selectedApp?.rowIndex === app.rowIndex ? L.hideDetails : L.viewDetails}
                     </button>
                   </div>
 
-                  {/* Expanded details */}
                   {selectedApp?.rowIndex === app.rowIndex && (
                     <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                       <div>
-                        <p className="text-xs text-gray-400">提交時間</p>
+                        <p className="text-xs text-gray-400">{L.submitTime}</p>
                         <p className="font-medium mt-0.5">{app.timestamp}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-400">預計付款日期</p>
-                        <p className="font-medium mt-0.5">{app.estimated_payment_date || '未指定'}</p>
+                        <p className="text-xs text-gray-400">{L.expectedDate}</p>
+                        <p className="font-medium mt-0.5">{app.estimated_payment_date || L.notSpecified}</p>
                       </div>
+                      {app.supplier_name && (
+                        <div>
+                          <p className="text-xs text-gray-400">{L.supplierName}</p>
+                          <p className="font-medium mt-0.5">{app.supplier_name}</p>
+                        </div>
+                      )}
+                      {app.bank_name && (
+                        <div>
+                          <p className="text-xs text-gray-400">{L.bankName} / {L.bankAccount}</p>
+                          <p className="font-medium mt-0.5">{app.bank_name} {app.bank_account_number}</p>
+                        </div>
+                      )}
                       <div className="sm:col-span-2">
-                        <p className="text-xs text-gray-400">完整付款詳情</p>
+                        <p className="text-xs text-gray-400">{L.fullDetails}</p>
                         <p className="font-medium mt-0.5 whitespace-pre-wrap">{app.payment_details}</p>
                       </div>
                       {app.quotation_link && (
                         <div className="sm:col-span-2 mt-2">
-                          <p className="text-xs text-gray-400 mb-2">報價單預覽</p>
+                          <p className="text-xs text-gray-400 mb-2">{L.quotationPreview}</p>
                           {isImageUrl(app.quotation_link) ? (
                             <img
                               src={app.quotation_link}
@@ -711,36 +1092,36 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
             <div className="p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-1">拒絕付款申請</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">{L.rejectTitle}</h3>
               <p className="text-sm text-gray-500 mb-4">
-                申請人：<span className="font-medium text-gray-700">{selectedApp.staff_name}</span>
+                {L.applicant}<span className="font-medium text-gray-700">{selectedApp.staff_name}</span>
               </p>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                拒絕原因 <span className="text-red-500">*</span>
-                <span className="font-normal text-gray-400 ml-1">（至少 20 字）</span>
+                {L.rejectReason} <span className="text-red-500">*</span>
+                <span className="font-normal text-gray-400 ml-1">{L.rejectMin}</span>
               </label>
               <textarea
                 value={rejectionReason}
                 onChange={e => setRejectionReason(e.target.value)}
                 rows={4}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
-                placeholder="請詳細說明拒絕理由..."
+                placeholder={L.rejectPlaceholder}
               />
-              <p className="text-xs text-gray-400 mt-1">{rejectionReason.length} / 20 字</p>
+              <p className="text-xs text-gray-400 mt-1">{rejectionReason.length} / 20</p>
               <div className="mt-5 flex justify-end gap-3">
                 <button
                   onClick={() => { setShowRejectModal(false); setRejectionReason(''); setSelectedApp(null); }}
                   disabled={actionLoading}
                   className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
                 >
-                  取消
+                  {L.cancel}
                 </button>
                 <button
                   onClick={handleReject}
                   disabled={actionLoading || rejectionReason.length < 20}
                   className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {actionLoading ? '處理中...' : '確認拒絕'}
+                  {actionLoading ? L.processing : L.confirmReject}
                 </button>
               </div>
             </div>
