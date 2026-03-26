@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { LABELS, CENTRE_OPTIONS, PROGRAMME_OPTIONS, EDB_OPTIONS, type Lang } from '@/lib/constants';
+import { LABELS, CENTRE_OPTIONS, PROGRAMME_OPTIONS, EDB_OPTIONS, type Lang, type Labels } from '@/lib/constants';
 
 interface Application {
   rowIndex: number;
@@ -147,7 +147,7 @@ function PinModal({
   onCancel,
 }: {
   role: Role;
-  L: typeof LABELS.zh;
+  L: Labels;
   onSuccess: () => void;
   onCancel: () => void;
 }) {

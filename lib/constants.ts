@@ -284,7 +284,8 @@ export const LABELS = {
     // Loading
     loading:            'Loading...',
   },
-} as const;
+};
 
 export type Lang = keyof typeof LABELS;
-export type LabelKey = keyof typeof LABELS.zh;
+export type Labels = typeof LABELS.zh;
+export type LabelKey = keyof Labels;

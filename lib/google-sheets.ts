@@ -110,7 +110,7 @@ export async function appendApplication(
     const existingRowCount = Math.max(0, (dataRes.data.values?.length ?? 1) - 1); // exclude header
     const recordNo = 'HKIT' + (existingRowCount + 1000).toString().padStart(6, '0');
 
-    const fieldsWithRecord = { ...fields, record_no: recordNo };
+    const fieldsWithRecord: Record<string, string> = { ...fields, record_no: recordNo };
 
     // 按標題順序建立行資料
     const row = headers.map(header => {
