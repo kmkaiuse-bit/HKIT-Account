@@ -290,6 +290,7 @@ export default function Dashboard() {
   function handleTabClick(key: Role) {
     if (unlockedRoles.has(key)) {
       setRole(key);
+      if (key === 'accounting' || key === 'principal') fetchApplications();
     } else {
       setPendingRole(key);
     }
@@ -1086,7 +1087,7 @@ export default function Dashboard() {
                       </div>
                       {app.quotation_link && (
                         <div className="sm:col-span-2 mt-2">
-                          <p className="text-xs text-gray-400 mb-2">{L.quotationPreview}</p>
+                          <p className="text-xs text-gray-400 mb-1">{L.quotationPreview}</p>
                           {isImageUrl(app.quotation_link) ? (
                             <img
                               src={app.quotation_link}
@@ -1094,11 +1095,14 @@ export default function Dashboard() {
                               className="max-w-full rounded-lg border border-gray-200"
                             />
                           ) : (
-                            <iframe
-                              src={toEmbedUrl(app.quotation_link)}
-                              className="w-full h-96 rounded-lg border border-gray-200"
-                              title="Quotation Preview"
-                            />
+                            <a
+                              href={app.quotation_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50"
+                            >
+                              {L.viewQuotation} ↗
+                            </a>
                           )}
                         </div>
                       )}
