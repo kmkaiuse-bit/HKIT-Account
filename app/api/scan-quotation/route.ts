@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const mimeType = file.type || 'image/jpeg';
 
     const body = {
-      model: 'google/gemini-2.0-flash-lite',
+      model: 'google/gemini-2.0-flash-001',
       messages: [
         {
           role: 'user',
