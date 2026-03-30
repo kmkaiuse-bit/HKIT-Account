@@ -10,6 +10,7 @@ interface Application {
   date: string;
   staff_name: string;
   payment_details: string;
+  claimants: string;
   payment_total_amount: number | undefined;
   supplier_name: string;
   bank_name: string;
@@ -23,6 +24,8 @@ interface Application {
   approval_status: string;
   quotation_link: string;
 }
+
+interface ClaimantRow { name: string; amount: string; description: string; }
 
 type Role = 'staff' | 'accounting' | 'principal';
 
@@ -40,8 +43,6 @@ const emptyForm = {
   centre: '',
   programme: '',
   term: '',
-  payment_details: '',
-  payment_total_amount: '',
   supplier_name: '',
   bank_name: '',
   bank_account_number: '',
@@ -49,6 +50,8 @@ const emptyForm = {
   estimated_payment_date: '',
   remark: '',
 };
+
+const emptyClaimant: ClaimantRow = { name: '', amount: '', description: '' };
 
 // ── Multi-Select component ────────────────────────────────────────────────────
 function MultiSelect({
@@ -223,13 +226,14 @@ export default function Dashboard() {
 
   // Staff form
   const [form, setForm] = useState(emptyForm);
-  const [quotationFile, setQuotationFile] = useState<File | null>(null);
+  const [claimants, setClaimants] = useState<ClaimantRow[]>([{ ...emptyClaimant }]);
+  const [quotationFiles, setQuotationFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // AI scan
-  const [scanning, setScanning] = useState(false);
+  const [scanningIdx, setScanningIdx] = useState<number | null>(null);
   const [aiNotice, setAiNotice] = useState(false);
 
   // Principal
@@ -307,31 +311,50 @@ export default function Dashboard() {
   }
 
   // ── AI scan ────────────────────────────────────────────────────────────────
-  async function handleFileChange(file: File | null) {
-    setQuotationFile(file);
-    setAiNotice(false);
-    if (!file) return;
+  async function handleFilesChange(incoming: FileList | null) {
+    if (!incoming || incoming.length === 0) return;
+    const toAdd = Array.from(incoming).slice(0, 5 - quotationFiles.length);
+    if (toAdd.length === 0) return;
 
-    setScanning(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/scan-quotation', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (data.success) {
-        setForm(f => ({
-          ...f,
-          ...(data.supplier_name   && { supplier_name: data.supplier_name }),
-          ...(data.amount          && { payment_total_amount: String(data.amount) }),
-          ...(data.description     && { payment_details: data.description }),
-        }));
-        setAiNotice(true);
+    const baseIdx = quotationFiles.length;
+    setQuotationFiles(prev => [...prev, ...toAdd]);
+    setAiNotice(false);
+
+    for (let i = 0; i < toAdd.length; i++) {
+      const file = toAdd[i];
+      const fileIdx = baseIdx + i;
+      setScanningIdx(fileIdx);
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch('/api/scan-quotation', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.success) {
+          if (fileIdx === 0 && data.supplier_name) {
+            setForm(f => ({ ...f, supplier_name: data.supplier_name }));
+          }
+          if (data.description || data.amount) {
+            setClaimants(prev => {
+              const next = [...prev];
+              const emptyIdx = next.findIndex(r => !r.description && !r.amount);
+              const target = emptyIdx >= 0 ? emptyIdx : next.length;
+              if (target >= next.length) next.push({ ...emptyClaimant });
+              next[target] = {
+                ...next[target],
+                ...(data.description && { description: data.description }),
+                ...(data.amount      && { amount: String(data.amount) }),
+              };
+              return next;
+            });
+          }
+          setAiNotice(true);
+        }
+      } catch (e) {
+        console.error('AI scan error:', e);
       }
-    } catch (e) {
-      console.error('AI scan error:', e);
-    } finally {
-      setScanning(false);
+      setScanningIdx(null);
     }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   // ── Submit form ───────────────────────────────────────────────────────────
@@ -340,9 +363,18 @@ export default function Dashboard() {
     setSubmitting(true);
     setSubmitResult(null);
     try {
+      const total = claimants.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
+      const paymentDetails = claimants
+        .filter(c => c.name || c.description)
+        .map(c => [c.name, c.description].filter(Boolean).join(': '))
+        .join('\n');
+
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-      if (quotationFile) fd.append('quotation', quotationFile);
+      fd.append('payment_total_amount', String(total));
+      fd.append('payment_details', paymentDetails);
+      fd.append('claimants', JSON.stringify(claimants));
+      quotationFiles.forEach((f, i) => fd.append(`quotation_${i}`, f));
 
       const res = await fetch('/api/submit', { method: 'POST', body: fd });
       const data = await res.json();
@@ -353,7 +385,8 @@ export default function Dashboard() {
           : L.successMsg;
         setSubmitResult({ ok: true, msg });
         setForm(emptyForm);
-        setQuotationFile(null);
+        setClaimants([{ ...emptyClaimant }]);
+        setQuotationFiles([]);
         setAiNotice(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
         fetchApplications();
@@ -553,21 +586,25 @@ export default function Dashboard() {
               <h2 className="text-xl font-bold text-gray-900">{L.formTitle}</h2>
               <button
                 type="button"
-                onClick={() => setForm({
-                  staff_name: 'Test User',
-                  date: new Date().toISOString().split('T')[0],
-                  centre: 'SSP',
-                  programme: 'DAE FT',
-                  term: '2024-25 Term A',
-                  payment_details: 'Purchase of office supplies for programme activities',
-                  payment_total_amount: '1234',
-                  supplier_name: 'ABC Trading Co.',
-                  bank_name: 'HSBC',
-                  bank_account_number: '123-456789-001',
-                  edb_funding: 'ECA',
-                  estimated_payment_date: '',
-                  remark: 'Test submission',
-                })}
+                onClick={() => {
+                  setForm({
+                    staff_name: 'Test User',
+                    date: new Date().toISOString().split('T')[0],
+                    centre: 'SSP',
+                    programme: 'DAE FT',
+                    term: '2024-25 Term A',
+                    supplier_name: 'ABC Trading Co.',
+                    bank_name: 'HSBC',
+                    bank_account_number: '123-456789-001',
+                    edb_funding: 'ECA',
+                    estimated_payment_date: '',
+                    remark: 'Test submission',
+                  });
+                  setClaimants([
+                    { name: 'Test User', amount: '800', description: 'Office supplies' },
+                    { name: 'Jane Doe',  amount: '434', description: 'Books' },
+                  ]);
+                }}
                 className="text-xs px-2 py-1 border border-dashed border-gray-300 text-gray-400 rounded hover:border-blue-400 hover:text-blue-500"
               >
                 Fill test data
@@ -635,46 +672,77 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Term + Amount */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {L.term} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text" required
-                    value={form.term}
-                    onChange={e => setForm(f => ({ ...f, term: e.target.value }))}
-                    placeholder={L.phTerm}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {L.amount} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number" required min="0" step="0.01"
-                    value={form.payment_total_amount}
-                    onChange={e => setForm(f => ({ ...f, payment_total_amount: e.target.value }))}
-                    placeholder="0.00"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Payment Details */}
+              {/* Term */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {L.paymentDetails} <span className="text-red-500">*</span>
+                  {L.term} <span className="text-red-500">*</span>
                 </label>
-                <textarea
-                  required rows={3}
-                  value={form.payment_details}
-                  onChange={e => setForm(f => ({ ...f, payment_details: e.target.value }))}
-                  placeholder={L.phPaymentDetails}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                <input
+                  type="text" required
+                  value={form.term}
+                  onChange={e => setForm(f => ({ ...f, term: e.target.value }))}
+                  placeholder={L.phTerm}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+
+              {/* Claimants */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {L.claimants} <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-xs text-gray-500 font-medium">
+                    {L.claimantsTotal}: HKD {claimants.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0).toLocaleString()}
+                  </span>
+                </div>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="grid gap-2 px-3 py-2 bg-gray-50 text-xs font-medium text-gray-500" style={{gridTemplateColumns:'1fr 1.5fr 90px 24px'}}>
+                    <span>{L.claimantName}</span>
+                    <span>{L.claimantDesc}</span>
+                    <span className="text-right">{L.claimantAmount}</span>
+                    <span/>
+                  </div>
+                  {claimants.map((row, idx) => (
+                    <div key={idx} className="grid gap-2 px-3 py-2 border-t border-gray-100 items-center" style={{gridTemplateColumns:'1fr 1.5fr 90px 24px'}}>
+                      <input
+                        type="text"
+                        value={row.name}
+                        onChange={e => setClaimants(prev => { const n=[...prev]; n[idx]={...n[idx],name:e.target.value}; return n; })}
+                        placeholder={L.phFullName}
+                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <input
+                        type="text"
+                        value={row.description}
+                        onChange={e => setClaimants(prev => { const n=[...prev]; n[idx]={...n[idx],description:e.target.value}; return n; })}
+                        placeholder={L.claimantDesc}
+                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <input
+                        type="number"
+                        value={row.amount}
+                        onChange={e => setClaimants(prev => { const n=[...prev]; n[idx]={...n[idx],amount:e.target.value}; return n; })}
+                        placeholder="0.00"
+                        min="0" step="0.01"
+                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setClaimants(prev => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx))}
+                        disabled={claimants.length === 1}
+                        className="text-gray-300 hover:text-red-400 disabled:opacity-0 text-base leading-none"
+                      >×</button>
+                    </div>
+                  ))}
+                </div>
+                {claimants.length < 10 && (
+                  <button
+                    type="button"
+                    onClick={() => setClaimants(prev => [...prev, { ...emptyClaimant }])}
+                    className="mt-2 text-sm text-blue-600 hover:text-blue-700"
+                  >{L.addClaimant}</button>
+                )}
               </div>
 
               {/* Supplier Name */}
@@ -749,58 +817,60 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* Quotation Upload */}
+              {/* Quotation Upload (multi-file, max 5) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {L.quotation}
                   <span className="ml-2 text-xs text-gray-400 font-normal">{L.quotationHint}</span>
+                  <span className="ml-1 text-xs text-gray-400 font-normal">(max 5)</span>
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
-                    onChange={e => handleFileChange(e.target.files?.[0] || null)}
-                    className="hidden"
-                    id="quotation-upload"
-                  />
-                  <label htmlFor="quotation-upload" className="cursor-pointer">
-                    {scanning ? (
-                      <div className="text-sm text-blue-600">{L.aiScanning}</div>
-                    ) : quotationFile ? (
-                      <div className="text-sm text-blue-600 font-medium">
-                        {quotationFile.name}
-                        <span className="ml-2 text-gray-400 text-xs">({(quotationFile.size / 1024).toFixed(0)} KB)</span>
-                      </div>
-                    ) : (
-                      <div className="text-sm text-gray-500">
-                        <span className="text-blue-600 font-medium">{L.clickUpload}</span>
-                        <span className="ml-1">{L.orDrop}</span>
-                      </div>
-                    )}
-                  </label>
-                </div>
-                {aiNotice && (
-                  <p className="mt-1 text-xs text-blue-600">{L.aiFilled}</p>
+                {quotationFiles.length < 5 && (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
+                      multiple
+                      onChange={e => handleFilesChange(e.target.files)}
+                      className="hidden"
+                      id="quotation-upload"
+                    />
+                    <label htmlFor="quotation-upload" className="cursor-pointer">
+                      {scanningIdx !== null ? (
+                        <div className="text-sm text-blue-600">{L.aiScanning} ({scanningIdx + 1})</div>
+                      ) : (
+                        <div className="text-sm text-gray-500">
+                          <span className="text-blue-600 font-medium">{L.clickUpload}</span>
+                          <span className="ml-1">{L.orDrop}</span>
+                        </div>
+                      )}
+                    </label>
+                  </div>
                 )}
-                {quotationFile && !scanning && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuotationFile(null);
-                      setAiNotice(false);
-                      if (fileInputRef.current) fileInputRef.current.value = '';
-                    }}
-                    className="mt-1 text-xs text-red-500 hover:text-red-700"
-                  >
-                    {L.removeFile}
-                  </button>
+                {quotationFiles.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {quotationFiles.map((f, i) => (
+                      <div key={i} className="flex items-center justify-between bg-gray-50 rounded px-3 py-1.5 text-sm">
+                        <span className="text-blue-600 font-medium truncate">{f.name}</span>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <span className="text-gray-400 text-xs">{(f.size / 1024).toFixed(0)} KB</span>
+                          {scanningIdx === i && <span className="text-xs text-blue-500">{L.aiScanning}</span>}
+                          <button
+                            type="button"
+                            onClick={() => setQuotationFiles(prev => prev.filter((_, idx) => idx !== i))}
+                            className="text-red-400 hover:text-red-600 text-xs"
+                          >{L.removeFile}</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
+                {aiNotice && <p className="mt-1 text-xs text-blue-600">{L.aiFilled}</p>}
               </div>
 
               <button
                 type="submit"
-                disabled={submitting || scanning}
+                disabled={submitting || scanningIdx !== null}
                 className="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {submitting ? L.submitting : L.submitBtn}
@@ -934,10 +1004,14 @@ export default function Dashboard() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {app.quotation_link ? (
-                          <a href={app.quotation_link} target="_blank" rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline text-xs">
-                            {L.view}
-                          </a>
+                          <div className="flex gap-2">
+                            {app.quotation_link.split(', ').filter(Boolean).map((link, i) => (
+                              <a key={i} href={link} target="_blank" rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline text-xs">
+                                {app.quotation_link.split(', ').length > 1 ? `${L.view} ${i+1}` : L.view}
+                              </a>
+                            ))}
+                          </div>
                         ) : (
                           <span className="text-gray-300 text-xs">—</span>
                         )}
@@ -1041,16 +1115,16 @@ export default function Dashboard() {
                         </button>
                       </>
                     )}
-                    {app.quotation_link && (
-                      <a
-                        href={app.quotation_link}
+                    {app.quotation_link && app.quotation_link.split(', ').filter(Boolean).map((link, i, arr) => (
+                      <a key={i}
+                        href={link}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
                       >
-                        {L.viewQuotation}
+                        {arr.length > 1 ? `${L.viewQuotation} ${i+1}` : L.viewQuotation}
                       </a>
-                    )}
+                    ))}
                     <button
                       onClick={() => setSelectedApp(selectedApp?.rowIndex === app.rowIndex ? null : app)}
                       className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
@@ -1081,29 +1155,57 @@ export default function Dashboard() {
                           <p className="font-medium mt-0.5">{app.bank_name} {app.bank_account_number}</p>
                         </div>
                       )}
-                      <div className="sm:col-span-2">
-                        <p className="text-xs text-gray-400">{L.fullDetails}</p>
-                        <p className="font-medium mt-0.5 whitespace-pre-wrap">{app.payment_details}</p>
-                      </div>
+                      {app.claimants && (() => {
+                        try {
+                          const rows = JSON.parse(app.claimants) as ClaimantRow[];
+                          if (rows.length > 0) return (
+                            <div className="sm:col-span-2">
+                              <p className="text-xs text-gray-400 mb-1">{L.claimants}</p>
+                              <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                                <thead className="bg-gray-50 text-xs text-gray-500">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left font-medium">{L.claimantName}</th>
+                                    <th className="px-3 py-2 text-left font-medium">{L.claimantDesc}</th>
+                                    <th className="px-3 py-2 text-right font-medium">{L.claimantAmount}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {rows.map((r, i) => (
+                                    <tr key={i} className="border-t border-gray-100">
+                                      <td className="px-3 py-2">{r.name}</td>
+                                      <td className="px-3 py-2 text-gray-600">{r.description}</td>
+                                      <td className="px-3 py-2 text-right font-medium">HKD {(parseFloat(r.amount||'0')).toLocaleString()}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        } catch {}
+                        return null;
+                      })()}
+                      {!app.claimants && app.payment_details && (
+                        <div className="sm:col-span-2">
+                          <p className="text-xs text-gray-400">{L.fullDetails}</p>
+                          <p className="font-medium mt-0.5 whitespace-pre-wrap">{app.payment_details}</p>
+                        </div>
+                      )}
                       {app.quotation_link && (
                         <div className="sm:col-span-2 mt-2">
                           <p className="text-xs text-gray-400 mb-1">{L.quotationPreview}</p>
-                          {isImageUrl(app.quotation_link) ? (
-                            <img
-                              src={app.quotation_link}
-                              alt="Quotation"
-                              className="max-w-full rounded-lg border border-gray-200"
-                            />
-                          ) : (
-                            <a
-                              href={app.quotation_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50"
-                            >
-                              {L.viewQuotation} ↗
-                            </a>
-                          )}
+                          <div className="flex flex-wrap gap-2">
+                            {app.quotation_link.split(', ').filter(Boolean).map((link, i, arr) => (
+                              isImageUrl(link) ? (
+                                <img key={i} src={link} alt={`Quotation ${i+1}`} className="max-w-xs rounded-lg border border-gray-200" />
+                              ) : (
+                                <a key={i} href={link} target="_blank" rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50"
+                                >
+                                  {arr.length > 1 ? `${L.viewQuotation} ${i+1}` : L.viewQuotation} ↗
+                                </a>
+                              )
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>

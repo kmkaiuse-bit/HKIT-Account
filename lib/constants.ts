@@ -71,6 +71,14 @@ export const LABELS = {
     aiScanning:         'AI 掃描中...',
     aiFilled:           'AI 已自動填寫 — 請核對後提交',
 
+    // Claimants
+    claimants:          '申請人明細',
+    addClaimant:        '+ 新增申請人',
+    claimantName:       '員工姓名',
+    claimantDesc:       '項目說明',
+    claimantAmount:     '金額 (HKD)',
+    claimantsTotal:     '合計',
+
     // Accounting tab
     totalApps:          '申請總數',
     totalAmount:        '申請總額',
@@ -204,6 +212,14 @@ export const LABELS = {
     // AI scan
     aiScanning:         'AI scanning...',
     aiFilled:           'AI auto-filled — please review before submitting',
+
+    // Claimants
+    claimants:          'Claimants',
+    addClaimant:        '+ Add Claimant',
+    claimantName:       'Staff Name',
+    claimantDesc:       'Items / Description',
+    claimantAmount:     'Amount (HKD)',
+    claimantsTotal:     'Total',
 
     // Accounting tab
     totalApps:          'Total Applications',

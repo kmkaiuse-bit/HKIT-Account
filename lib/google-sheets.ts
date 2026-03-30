@@ -12,6 +12,7 @@ export interface Application {
   date: string;
   staff_name: string;
   payment_details: string;
+  claimants: string;
   payment_total_amount: number | undefined;
   supplier_name: string;
   bank_name: string;

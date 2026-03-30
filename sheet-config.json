@@ -7,6 +7,7 @@
     "Date":                 "date",
     "Staff Name":           "staff_name",
     "Payment Details":      "payment_details",
+    "Claimants":            "claimants",
     "Payment Total Amount": "payment_total_amount",
     "Supplier Name":        "supplier_name",
     "Bank Name":            "bank_name",

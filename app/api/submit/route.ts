@@ -14,34 +14,39 @@ export async function POST(request: NextRequest) {
     const term                   = (formData.get('term') as string || '').trim();
     const payment_details        = (formData.get('payment_details') as string || '').trim();
     const payment_total_amount   = (formData.get('payment_total_amount') as string || '').trim();
+    const claimants              = (formData.get('claimants') as string || '').trim();
     const supplier_name          = (formData.get('supplier_name') as string || '').trim();
     const bank_name              = (formData.get('bank_name') as string || '').trim();
     const bank_account_number    = (formData.get('bank_account_number') as string || '').trim();
     const edb_funding            = (formData.get('edb_funding') as string || '').trim();
     const estimated_payment_date = (formData.get('estimated_payment_date') as string || '').trim();
     const remark                 = (formData.get('remark') as string || '').trim();
-    const quotationFile          = formData.get('quotation') as File | null;
 
-    if (!staff_name || !date || !centre || !programme || !term || !payment_details || !payment_total_amount || !supplier_name) {
+    if (!staff_name || !date || !centre || !programme || !term || !supplier_name) {
       return NextResponse.json(
         { success: false, error: '請填寫所有必填欄位 (Please fill in all required fields)' },
         { status: 400 }
       );
     }
 
-    let quotation_link = '';
-    let driveWarning = '';
-    if (quotationFile && quotationFile.size > 0) {
+    // Upload up to 5 quotation files
+    const quotationLinks: string[] = [];
+    const driveWarnings: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const file = formData.get(`quotation_${i}`) as File | null;
+      if (!file || file.size === 0) break;
       try {
-        const arrayBuffer = await quotationFile.arrayBuffer();
+        const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-        quotation_link = await uploadFileToDrive(buffer, quotationFile.name, quotationFile.type);
+        const link = await uploadFileToDrive(buffer, file.name, file.type);
+        quotationLinks.push(link);
       } catch (driveError) {
-        console.error('Drive upload failed:', driveError);
-        driveWarning = driveError instanceof Error ? driveError.message : 'Drive upload failed';
+        console.error(`Drive upload failed for file ${i}:`, driveError);
+        driveWarnings.push(driveError instanceof Error ? driveError.message : 'Drive upload failed');
       }
     }
 
+    const quotation_link = quotationLinks.join(', ');
     const timestamp = new Date().toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong' });
 
     await appendApplication({
@@ -49,6 +54,7 @@ export async function POST(request: NextRequest) {
       date,
       staff_name,
       payment_details,
+      claimants,
       payment_total_amount,
       supplier_name,
       bank_name,
@@ -67,7 +73,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: '申請已成功提交',
-      ...(driveWarning ? { warning: `報價單上傳失敗：${driveWarning}` } : {}),
+      ...(driveWarnings.length > 0 ? { warning: `報價單上傳失敗：${driveWarnings.join('; ')}` } : {}),
     });
   } catch (error) {
     console.error('Submit API Error:', error);
