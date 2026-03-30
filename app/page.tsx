@@ -548,7 +548,30 @@ export default function Dashboard() {
       {role === 'staff' && (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-white rounded-xl shadow p-6 sm:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-1">{L.formTitle}</h2>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-xl font-bold text-gray-900">{L.formTitle}</h2>
+              <button
+                type="button"
+                onClick={() => setForm({
+                  staff_name: 'Test User',
+                  date: new Date().toISOString().split('T')[0],
+                  centre: 'SSP',
+                  programme: 'DAE FT',
+                  term: '2024-25 Term A',
+                  payment_details: 'Purchase of office supplies for programme activities',
+                  payment_total_amount: '1234',
+                  supplier_name: 'ABC Trading Co.',
+                  bank_name: 'HSBC',
+                  bank_account_number: '123-456789-001',
+                  edb_funding: 'ECA',
+                  estimated_payment_date: '',
+                  remark: 'Test submission',
+                })}
+                className="text-xs px-2 py-1 border border-dashed border-gray-300 text-gray-400 rounded hover:border-blue-400 hover:text-blue-500"
+              >
+                Fill test data
+              </button>
+            </div>
             <p className="text-sm text-gray-500 mb-6">{L.formSubtitle}</p>
 
             {submitResult && (
