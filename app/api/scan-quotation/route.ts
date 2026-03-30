@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const mimeType = file.type || 'image/jpeg';
 
     const body = {
-      model: 'google/gemini-2.0-flash-exp:free',
+      model: 'google/gemini-2.0-flash-lite',
       messages: [
         {
           role: 'user',
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     if (!res.ok) {
       const err = await res.text();
       console.error('OpenRouter error:', err);
-      return NextResponse.json({ success: false, error: 'AI scan failed' }, { status: 500 });
+      return NextResponse.json({ success: false, error: `OpenRouter: ${res.status} — ${err}` }, { status: 500 });
     }
 
     const data = await res.json();
