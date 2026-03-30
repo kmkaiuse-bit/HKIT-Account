@@ -320,9 +320,9 @@ export default function Dashboard() {
       if (data.success) {
         setForm(f => ({
           ...f,
-          supplier_name:        data.supplier_name || f.supplier_name,
-          payment_total_amount: data.amount ? String(data.amount) : f.payment_total_amount,
-          payment_details:      data.description || f.payment_details,
+          ...(data.supplier_name   && { supplier_name: data.supplier_name }),
+          ...(data.amount          && { payment_total_amount: String(data.amount) }),
+          ...(data.description     && { payment_details: data.description }),
         }));
         setAiNotice(true);
       }
