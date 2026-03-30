@@ -89,11 +89,41 @@ PRINCIPAL_PIN=xxxx
 
 ---
 
-## Feature 8: Google Drive Storage (Personal Account)
-No code changes. Config only:
-- [ ] Create quotation folder in personal Google Drive
-- [ ] Share folder with service account email (Editor)
-- [ ] Copy folder ID → set `GOOGLE_DRIVE_FOLDER_ID` in `.env.local`
+## Feature 8: Google Drive Storage (Personal Account) ✅
+
+### Current setup (personal Google account)
+Files are uploaded using your personal OAuth token so they are owned by your account and count against your personal Drive quota.
+
+**One-time setup (already done):**
+- [x] Create quotation folder in personal Google Drive
+- [x] Copy folder ID → set `GOOGLE_DRIVE_FOLDER_ID` in Vercel env vars
+- [x] Create OAuth client in Google Cloud Console (Web application type)
+  - Add `https://developers.google.com/oauthplayground` as authorised redirect URI
+- [x] Get refresh token via [OAuth Playground](https://developers.google.com/oauthplayground)
+  - Gear icon → Use your own OAuth credentials → paste Client ID & Secret
+  - Authorise scope: `https://www.googleapis.com/auth/drive`
+  - Exchange code → copy Refresh token
+- [x] Set in Vercel env vars:
+  - `GOOGLE_OAUTH_CLIENT_ID`
+  - `GOOGLE_OAUTH_CLIENT_SECRET`
+  - `GOOGLE_USER_REFRESH_TOKEN`
+- [x] Code: `getDriveClientForUpload()` in `lib/google-sheets.ts` uses OAuth2 when these vars are present
+
+---
+
+## Future: Migrate to Google Workspace Shared Drive
+
+When the organisation moves to Google Workspace, switch to service account + Shared Drive (no OAuth token needed, no personal quota used).
+
+**Steps:**
+1. In Google Workspace, create a **Shared Drive** (Team Drive) and a folder inside it for quotations
+2. Share the Shared Drive with the service account email (`GOOGLE_SERVICE_ACCOUNT_EMAIL`) — give it **Content Manager** access
+3. Copy the folder ID from the URL → update `GOOGLE_DRIVE_FOLDER_ID` in Vercel env vars
+4. **Remove** these 3 env vars from Vercel (the code automatically falls back to service account):
+   - `GOOGLE_OAUTH_CLIENT_ID`
+   - `GOOGLE_OAUTH_CLIENT_SECRET`
+   - `GOOGLE_USER_REFRESH_TOKEN`
+5. Redeploy — no code changes needed
 
 ---
 
