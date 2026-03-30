@@ -48,6 +48,24 @@ function getGoogleDriveClient() {
   return google.drive({ version: 'v3', auth: getAuth() });
 }
 
+// For personal Google Drive uploads — uses user OAuth token so files are owned by
+// the user (counts against their quota). Falls back to service account when
+// GOOGLE_USER_REFRESH_TOKEN is not set (e.g. after migrating to Workspace Shared Drive).
+function getDriveClientForUpload() {
+  const refreshToken = process.env.GOOGLE_USER_REFRESH_TOKEN;
+  if (refreshToken) {
+    const oauth2 = new google.auth.OAuth2(
+      process.env.GOOGLE_OAUTH_CLIENT_ID,
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+    );
+    oauth2.setCredentials({ refresh_token: refreshToken });
+    return google.drive({ version: 'v3', auth: oauth2 });
+  }
+  // Workspace migration path: remove the 3 OAuth env vars and this falls back to
+  // service account, which works with Shared Drives.
+  return getGoogleDriveClient();
+}
+
 // 讀取所有申請記錄
 export async function getAllApplications(): Promise<Application[]> {
   try {
@@ -137,7 +155,7 @@ export async function uploadFileToDrive(
   mimeType: string
 ): Promise<string> {
   try {
-    const drive = getGoogleDriveClient();
+    const drive = getDriveClientForUpload();
 
     const fileStream = new Readable();
     fileStream.push(fileBuffer);
