@@ -149,6 +149,45 @@ When moving to Workspace, switch back to service account + Shared Drive (no OAut
 
 ---
 
+## Feature 10: Admin Dashboard (`/admin`) — Planned
+
+**Access:** Direct URL only — no link in the main app. Protected by `ADMIN_PIN` env var (no fallback).
+
+### Google Sheet Setup
+- [ ] Add `ADMIN_PIN` to Vercel env vars
+- [ ] (Optional) Hide "Logs" tab in Google Sheets UI to prevent accidental viewing
+
+### Data Layer — `lib/google-sheets.ts`
+- [x] Add `LogEntry` interface + `EVENT_TYPES` const array
+- [x] Add private `ensureLogsSheet()` — auto-creates "Logs" tab + headers on first log write
+- [x] Add `export async function appendLog(...)` — never throws, wraps in try/catch
+- [x] Add `export async function getLogs(options)` — fetch, filter, paginate, newest first
+- [x] Change `appendApplication()` return type `Promise<void>` → `Promise<string>` (returns `recordNo`)
+
+### New API Routes
+- [x] `app/api/admin/verify/route.ts` — POST `{ pin }`, validates `ADMIN_PIN`, returns `{ ok: boolean }`
+- [x] `app/api/admin/logs/route.ts` — GET with `x-admin-pin` header, supports `page/pageSize/eventType/startDate/endDate`
+
+### Instrument Existing Routes
+- [x] `app/api/submit/route.ts` → log `APPLICATION_SUBMITTED` with `recordNo`
+- [x] `app/api/update-status/route.ts` → log `APPLICATION_APPROVED` / `APPLICATION_REJECTED`
+- [x] `app/api/verify-pin/route.ts` → log `PIN_VERIFIED` / `PIN_FAILED`
+- [x] `app/api/update-amount/route.ts` → log `AMOUNT_UPDATED`
+- [x] `app/api/scan-quotation/route.ts` → log `AI_SCAN_SUCCESS` / `AI_SCAN_FAILURE`
+
+### Admin UI — `app/admin/page.tsx`
+- [x] Login view: full-page card, password input, POST to `/api/admin/verify`
+- [x] Dashboard view: filter bar (event type, date range), stats row, paginated log table
+- [x] Auto-refresh toggle (30s interval)
+- [x] Color-coded event type badges + SUCCESS/FAILURE status badges
+
+### Env Vars
+- [x] Add `ADMIN_PIN=` to `.env.example`
+- [ ] Add `ADMIN_PIN` to Vercel env vars (manual step)
+- [ ] (Optional) Hide "Logs" tab in Google Sheets UI to prevent accidental viewing
+
+---
+
 ## Verification Checklist
 
 - [x] All 3 tabs load

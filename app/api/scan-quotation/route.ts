@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { appendLog } from '@/lib/google-sheets';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,9 +51,20 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(body),
     });
 
+    const ip = (request.headers.get('x-forwarded-for') ?? 'unknown').split(',')[0].trim();
+
     if (!res.ok) {
       const err = await res.text();
       console.error('OpenRouter error:', err);
+      await appendLog({
+        eventType: 'AI_SCAN_FAILURE',
+        actor: 'staff',
+        recordNo: '',
+        details: `AI scan failed: OpenRouter ${res.status}`,
+        status: 'FAILURE',
+        ipAddress: ip,
+        extra: err.slice(0, 200),
+      });
       return NextResponse.json({ success: false, error: `OpenRouter: ${res.status} — ${err}` }, { status: 500 });
     }
 
@@ -67,8 +79,27 @@ export async function POST(request: NextRequest) {
       parsed = JSON.parse(cleaned);
     } catch {
       console.error('Failed to parse AI response:', cleaned);
+      await appendLog({
+        eventType: 'AI_SCAN_FAILURE',
+        actor: 'staff',
+        recordNo: '',
+        details: 'AI scan failed: could not parse response JSON',
+        status: 'FAILURE',
+        ipAddress: ip,
+        extra: cleaned.slice(0, 200),
+      });
       return NextResponse.json({ success: false, error: 'Could not parse AI response' }, { status: 500 });
     }
+
+    await appendLog({
+      eventType: 'AI_SCAN_SUCCESS',
+      actor: 'staff',
+      recordNo: '',
+      details: `AI scan succeeded: supplier="${parsed.supplier_name ?? ''}", amount=${parsed.amount ?? ''}`,
+      status: 'SUCCESS',
+      ipAddress: ip,
+      extra: '',
+    });
 
     return NextResponse.json({
       success: true,

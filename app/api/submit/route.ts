@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { appendApplication, uploadFileToDrive } from '@/lib/google-sheets';
+import { appendApplication, uploadFileToDrive, appendLog } from '@/lib/google-sheets';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,7 +49,9 @@ export async function POST(request: NextRequest) {
     const quotation_link = quotationLinks.join(', ');
     const timestamp = new Date().toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong' });
 
-    await appendApplication({
+    const ip = (request.headers.get('x-forwarded-for') ?? 'unknown').split(',')[0].trim();
+
+    const recordNo = await appendApplication({
       timestamp,
       date,
       staff_name,
@@ -70,6 +72,16 @@ export async function POST(request: NextRequest) {
       quotation_link,
     });
 
+    await appendLog({
+      eventType: 'APPLICATION_SUBMITTED',
+      actor: 'staff',
+      recordNo,
+      details: `${staff_name} submitted claim for ${centre} — HKD ${payment_total_amount}`,
+      status: 'SUCCESS',
+      ipAddress: ip,
+      extra: JSON.stringify({ centre, programme, supplier_name }),
+    });
+
     return NextResponse.json({
       success: true,
       message: '申請已成功提交',
@@ -78,6 +90,16 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Submit API Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to submit application';
+    const ip = (request.headers.get('x-forwarded-for') ?? 'unknown').split(',')[0].trim();
+    await appendLog({
+      eventType: 'API_ERROR',
+      actor: 'system',
+      recordNo: '',
+      details: `Submit error: ${errorMessage}`,
+      status: 'FAILURE',
+      ipAddress: ip,
+      extra: '',
+    });
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

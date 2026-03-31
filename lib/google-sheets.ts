@@ -1,9 +1,17 @@
 import { google } from 'googleapis';
 import { Readable } from 'stream';
 import sheetConfig from '../sheet-config.json';
+import { LogEntry } from './log-types';
+export type { LogEntry, EventType } from './log-types';
+export { EVENT_TYPES } from './log-types';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || sheetConfig.sheetId;
 const SHEET_NAME = sheetConfig.sheetName;
+
+const LOGS_SHEET_NAME = 'Logs';
+const LOGS_HEADERS = ['Timestamp', 'Event Type', 'Actor', 'Record No', 'Details', 'Status', 'IP Address', 'Extra'];
+
+let logsSheetReady = false;
 
 export interface Application {
   rowIndex: number;
@@ -110,7 +118,7 @@ export async function getAllApplications(): Promise<Application[]> {
 // 新增申請記錄（員工提交）
 export async function appendApplication(
   fields: Record<string, string>
-): Promise<void> {
+): Promise<string> {
   try {
     const sheets = getGoogleSheetsClient();
 
@@ -143,6 +151,8 @@ export async function appendApplication(
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [row] },
     });
+
+    return recordNo;
   } catch (error) {
     console.error('Error appending application:', error);
     throw new Error('Failed to append application to Google Sheets');
@@ -247,6 +257,126 @@ export async function batchUpdateApprovalStatus(
     console.error('Error batch updating:', error);
     throw new Error('Failed to batch update approval status');
   }
+}
+
+// ─── Admin Logging ────────────────────────────────────────────────────────────
+
+async function ensureLogsSheet(): Promise<void> {
+  if (logsSheetReady) return;
+  const sheets = getGoogleSheetsClient();
+
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SHEET_ID,
+    fields: 'sheets.properties.title',
+  });
+  const titles = (spreadsheet.data.sheets ?? []).map(s => s.properties?.title ?? '');
+
+  if (!titles.includes(LOGS_SHEET_NAME)) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: { requests: [{ addSheet: { properties: { title: LOGS_SHEET_NAME } } }] },
+    });
+  }
+
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `${LOGS_SHEET_NAME}!A1:H1`,
+  });
+  if (!headerRes.data.values || headerRes.data.values.length === 0) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${LOGS_SHEET_NAME}!A1:H1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [LOGS_HEADERS] },
+    });
+  }
+
+  logsSheetReady = true;
+}
+
+export async function appendLog(entry: Omit<LogEntry, 'timestamp'>): Promise<void> {
+  try {
+    await ensureLogsSheet();
+    const sheets = getGoogleSheetsClient();
+    const timestamp = new Date().toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong' });
+    const row = [
+      timestamp,
+      entry.eventType,
+      entry.actor,
+      entry.recordNo,
+      entry.details,
+      entry.status,
+      entry.ipAddress,
+      entry.extra,
+    ];
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: `${LOGS_SHEET_NAME}!A:A`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [row] },
+    });
+  } catch (error) {
+    console.error('appendLog failed (non-fatal):', error);
+  }
+}
+
+export async function getLogs(options: {
+  page: number;
+  pageSize: number;
+  eventType?: string;
+  startDate?: string;
+  endDate?: string;
+}): Promise<{ logs: LogEntry[]; total: number }> {
+  const sheets = getGoogleSheetsClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `${LOGS_SHEET_NAME}!A:H`,
+  });
+
+  const rows = response.data.values ?? [];
+  if (rows.length <= 1) return { logs: [], total: 0 };
+
+  let entries: LogEntry[] = rows.slice(1).map(row => ({
+    timestamp: row[0] ?? '',
+    eventType: row[1] ?? '',
+    actor:     row[2] ?? '',
+    recordNo:  row[3] ?? '',
+    details:   row[4] ?? '',
+    status:    (row[5] === 'FAILURE' ? 'FAILURE' : 'SUCCESS') as 'SUCCESS' | 'FAILURE',
+    ipAddress: row[6] ?? '',
+    extra:     row[7] ?? '',
+  }));
+
+  if (options.eventType) {
+    entries = entries.filter(e => e.eventType === options.eventType);
+  }
+
+  if (options.startDate || options.endDate) {
+    entries = entries.filter(e => {
+      // timestamp format: "31/3/2026, 14:22:05" (zh-HK locale)
+      // Parse by splitting on comma and reformatting
+      try {
+        const datePart = e.timestamp.split(',')[0].trim();
+        const parts = datePart.split('/');
+        if (parts.length < 3) return true;
+        const d = parts[0].padStart(2, '0');
+        const m = parts[1].padStart(2, '0');
+        const y = parts[2];
+        const dateStr = `${y}-${m}-${d}`;
+        if (options.startDate && dateStr < options.startDate) return false;
+        if (options.endDate   && dateStr > options.endDate)   return false;
+        return true;
+      } catch {
+        return true;
+      }
+    });
+  }
+
+  entries.reverse();
+  const total = entries.length;
+  const { page, pageSize } = options;
+  const logs = entries.slice((page - 1) * pageSize, page * pageSize);
+  return { logs, total };
 }
 
 // 更新金額

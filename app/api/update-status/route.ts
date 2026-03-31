@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateApprovalStatus, batchUpdateApprovalStatus } from '@/lib/google-sheets';
+import { updateApprovalStatus, batchUpdateApprovalStatus, appendLog } from '@/lib/google-sheets';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +30,18 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const ip = (request.headers.get('x-forwarded-for') ?? 'unknown').split(',')[0].trim();
       await updateApprovalStatus(rowIndex, status, rejectionReason);
+
+      await appendLog({
+        eventType: status === 'APPROVED' ? 'APPLICATION_APPROVED' : 'APPLICATION_REJECTED',
+        actor: 'principal',
+        recordNo: body.record_no ?? '',
+        details: `Row ${rowIndex} set to ${status}${rejectionReason ? ': ' + rejectionReason.slice(0, 80) : ''}`,
+        status: 'SUCCESS',
+        ipAddress: ip,
+        extra: rejectionReason ? JSON.stringify({ rejectionReason }) : '',
+      });
 
       return NextResponse.json({ success: true, message: 'Status updated successfully' });
     }
